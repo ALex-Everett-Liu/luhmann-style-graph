@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zettelkasten Visualization</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    form {
+      margin-bottom: 20px;
+    }
+    svg {
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>Zettelkasten System</h1>
+
+  <!-- Form to add notes -->
+  <form id="noteForm">
+    <label>
+      Note ID:
+      <input type="text" id="noteId" required>
+    </label>
+    <label>
+      Content:
+      <input type="text" id="noteContent" required>
+    </label>
+    <button type="submit">Add Note</button>
+  </form>
+
+  <!-- Form to add links -->
+  <form id="linkForm">
+    <label>
+      From Note ID:
+      <input type="text" id="fromId" required>
+    </label>
+    <label>
+      To Note ID:
+      <input type="text" id="toId" required>
+    </label>
+    <button type="submit">Add Link</button>
+  </form>
+
+  <h2>Graph Visualization</h2>
+  <svg width="800" height="600"></svg>
+
+  <script src="script.js"></script>
+</body>
+</html>
