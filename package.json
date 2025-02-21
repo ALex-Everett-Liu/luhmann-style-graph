@@ -1,0 +1,33 @@
+{
+  "name": "luhmann-style-graph",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "pkg . --out-path dist"
+  },
+  "bin": "server.js",
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "zettelkasten2.db"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "d3": "^7.9.0",
+    "express": "^4.21.2",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}
