@@ -1,6 +1,22 @@
 # Logging System Design
 
-## 1. Log Levels
+## 1. Process-Specific Logging
+
+### Main Process Logs
+- Application lifecycle events
+- Window management
+- IPC communication
+- Server initialization
+- Database operations
+
+### Renderer Process Logs
+- UI interactions
+- View changes
+- Data visualization
+- Client-side errors
+- Performance metrics
+
+## 2. Log Levels
 
 ### ERROR (Highest Priority)
 - Unrecoverable errors that prevent system operation
@@ -40,101 +56,77 @@
 - DOM updates
 - Resource usage
 
-## 2. Implementation Example
+### ERROR
+- IPC communication failures
+- Window creation failures
+- Native module errors
+- Database access errors in production
 
-luhmann-style-graph/utils/logger.js
+### WARN
+- Slow IPC operations
+- High memory usage
+- Renderer process unresponsiveness
+- Database migration issues
 
-## 3. Logging Categories
+### INFO
+- Application startup/shutdown
+- Window creation/destruction
+- Server status changes
+- Database connections
+- View switches
 
-### Database Operations
+## 3. Implementation Example
 
 ```javascript
-// Example logging structure
-{
-    timestamp: "2024-03-20T10:00:00.000Z",
-    level: "error",
-    category: "database",
-    operation: "insert",
-    table: "notes",
-    error: {
-        code: "SQLITE_CONSTRAINT",
-        message: "UNIQUE constraint failed"
-    },
-    data: {
-        noteId: "1a",
-        content: "..."
+// Main Process Logging
+const { logger, categoryLogger } = require('./utils/logger');
+const appLogger = categoryLogger('app');
+
+app.on('ready', () => {
+    appLogger.info('Electron app ready', {
+        version: app.getVersion(),
+        platform: process.platform
+    });
+});
+
+// Renderer Process Logging
+const clientLogger = {
+    error: (message, data = {}) => {
+        console.error(message, data);
+        window.electron?.sendLog('error', { message, data });
     }
-}
-```
-
-### API Endpoints
-
-```javascript
-// Example logging structure
-{
-    timestamp: "2024-03-20T10:01:00.000Z",
-    level: "info",
-    category: "api",
-    method: "POST",
-    endpoint: "/api/notes",
-    duration: 125,
-    requestId: "req-123",
-    userId: "user-456"
-}
-```
-
-### Visualization Operations
-
-```javascript
-// Example logging structure
-{
-    timestamp: "2024-03-20T10:02:00.000Z",
-    level: "debug",
-    category: "visualization",
-    component: "mindMap",
-    action: "render",
-    nodeCount: 15,
-    linkCount: 23,
-    renderTime: 250
-}
+    // ... other levels
+};
 ```
 
 ## 4. Integration Points
 
-### Server-side Integration
+### IPC Logging Bridge
 
 ```javascript
-// Add to server.js
-app.use((req, res, next) => {
-  req.requestId = generateRequestId();
-  logger.info({
-    category: 'request',
-    method: req.method,
-    path: req.path,
-    requestId: req.requestId
-  });
-  next();
+// preload.js
+contextBridge.exposeInMainWorld('electron', {
+    sendLog: (level, data) => {
+        ipcRenderer.send('log', level, data);
+    }
+});
+
+// main.js
+ipcMain.on('log', (event, level, data) => {
+    appLogger[level](data.message, data);
 });
 ```
-### Client-side Integration
+
+### Log File Locations
 
 ```javascript
-// Add to script.js
-const clientLogger = {
-    error: (message, data) => {
-        console.error(message, data);
-        fetch('/api/logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                level: 'error',
-                message,
-                data,
-                timestamp: new Date().toISOString()
-            })
-        });
+const logConfig = {
+    development: {
+        path: path.join(__dirname, 'logs')
+    },
+    production: {
+        path: path.join(app.getPath('userData'), 'logs')
     }
-    // ... other levels
 };
 ```
 
@@ -147,6 +139,13 @@ const clientLogger = {
 - Visualization rendering performance
 - User action frequencies
 - Resource usage patterns
+
+### Additional Metrics to Track
+- IPC message frequency and duration
+- Window creation/destruction times
+- Memory usage per process
+- Renderer process responsiveness
+- Native module performance
 
 ### Log Rotation Policy
 - Error logs: 5MB per file, 5 files maximum
@@ -161,37 +160,59 @@ const clientLogger = {
 - Memory usage > 80%
 - Disk space < 20%
 
+### Production Considerations
+- Log file location in user data directory
+- Size limitations based on platform
+- Automatic log cleanup
+- Crash reporting integration
+
 ## 6. Implementation Steps
 
-1. Install Dependencies
-
+1. Update Dependencies
 ```json
 {
     "dependencies": {
+        "electron-log": "^5.0.0",
         "winston": "^3.11.0",
         "winston-daily-rotate-file": "^5.0.0"
     }
 }
 ```
 
-2. Create Log Directories
+2. Create Process-Specific Loggers
+```javascript
+// Main process logger
+const mainLogger = categoryLogger('main');
 
-```bash
-mkdir -p logs/error
-mkdir -p logs/combined
-mkdir -p logs/access
+// Renderer process logger bridge
+const rendererLogger = categoryLogger('renderer');
 ```
 
-3. Update Application Code
-- Add logging calls at key points
-- Implement error boundaries
-- Add performance monitoring
-- Set up log rotation
-- Configure monitoring alerts
+3. Configure Log Paths
+```javascript
+const getLogPath = () => {
+    const isDev = process.env.NODE_ENV === 'development';
+    return isDev ? 
+        path.join(__dirname, 'logs') : 
+        path.join(app.getPath('userData'), 'logs');
+};
+```
 
-4. Documentation
-- Log format specifications
-- Error code definitions
-- Troubleshooting guides
-- Performance benchmarks
-- Alert thresholds
+4. Setup Error Handling
+```javascript
+process.on('uncaughtException', (error) => {
+    mainLogger.error('Uncaught exception', {
+        error: {
+            message: error.message,
+            stack: error.stack
+        }
+    });
+});
+```
+
+5. Documentation Updates
+- Process-specific logging guidelines
+- IPC communication patterns
+- Error handling strategies
+- Log file management in production
+- Debug logging in development

@@ -11,7 +11,7 @@
 ## Project Overview
 
 ### Purpose
-A knowledge management system implementing a Zettelkasten-style note-taking approach with hierarchical relationships and graph-based visualizations.
+A desktop knowledge management system built with Electron, implementing a Zettelkasten-style note-taking approach with hierarchical relationships and graph-based visualizations.
 
 ### Key Features
 - Hierarchical note organization
@@ -20,14 +20,33 @@ A knowledge management system implementing a Zettelkasten-style note-taking appr
 - Interactive filtering
 - Parent-child relationship management
 - Weighted connections between notes
+- Cross-platform desktop application
+- Local data storage
+- System-level integration
+- Offline-first functionality
 
 ## Core Components
 
-### 1. Server Infrastructure (server.js)
+### 1. Electron Infrastructure (main.js)
+
+#### Main Process
+Class: ElectronApp
+- createWindow(): Creates and manages the main application window
+- startServer(): Initializes the Express server
+- setupIPC(): Configures inter-process communication
+- handleAppEvents(): Manages application lifecycle events
+
+#### IPC Communication
+Class: IPCManager
+- setupMainHandlers(): Configures main process handlers
+- setupRendererBridge(): Sets up preload script bridges
+- handleLogging(): Manages logging across processes
+
+### 2. Server Infrastructure (server.js)
 
 #### Database Connection
-
 Class: DatabaseManager
+- getDbPath(): Determines correct database path based on environment
 - init(): Initializes SQLite database connection
 - handleError(error): Error handling for database operations
 
@@ -38,7 +57,7 @@ Class: ServerConfig
 - setupCSP(): Set Content Security Policy
 - setupStaticFiles(): Configure static file serving
 
-### 2. Data Models
+### 3. Data Models
 
 #### Notes Model
 
@@ -70,7 +89,7 @@ Methods:
 - update(from_id, to_id, properties) → Promise<void>
 - delete(from_id, to_id) → Promise<void>
 
-### 3. API Controllers
+### 4. API Controllers
 
 #### Notes Controller
 
@@ -99,7 +118,7 @@ Methods:
 - getGraph(req, res) → Promise<Response>
   Output: {nodes: Node[], links: Link[]}
 
-### 4. Frontend Components (public/script.js)
+### 5. Frontend Components (public/script.js)
 
 #### Visualization Components
 
@@ -133,12 +152,22 @@ Methods:
 - applyFilters(): Applies current filters
 - clearFilters(): Clears all filters
 
+### 6. Preload Bridge (preload.js)
+
+Class: PreloadBridge
+Methods:
+- exposeAPIs(): Exposes safe APIs to renderer
+- setupLogging(): Configures logging bridge
+- setupIPC(): Sets up IPC communication
+
 ## Main Workflow
 
 ### 1. Application Initialization
+- Electron app startup
+- Window creation
+- Express server initialization
 - Database connection establishment
-- Server middleware configuration
-- Static resources setup
+- IPC setup
 
 ### 2. Data Flow
 - Note Creation → Parent-Child Relationship Establishment → Link Creation
@@ -190,22 +219,26 @@ Methods:
 ## Technical Stack
 
 ### Core Technologies
+- Runtime: Electron
 - Backend: Express.js
 - Database: SQLite3
 - Frontend: D3.js
 - API: REST
 
 ### Development Tools
-- Runtime: Node.js
+- Build System: electron-builder
 - Package Manager: npm
-- Development Port: 3060
-- Development Tools: Browser DevTools
+- Development Tools: 
+  - Electron DevTools
+  - Browser DevTools
+  - electron-rebuild
 
 ### Dependencies
 | Package | Version | Purpose |
 |---------|---------|---------|
+| Electron | ^28.0.0 | Desktop runtime |
 | Express.js | ^4.x | Web framework |
 | SQLite3 | ^5.x | Database |
 | D3.js | ^7.x | Visualization |
-| CORS | ^2.x | Cross-origin resource sharing |
-| Body-parser | ^1.x | Request parsing |
+| electron-builder | ^24.0.0 | Application packaging |
+| electron-rebuild | ^3.2.9 | Native module rebuilding |
