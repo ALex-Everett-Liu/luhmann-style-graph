@@ -6,7 +6,7 @@ document.getElementById("linkForm").addEventListener("submit", (e) => {
     const from_id = document.getElementById("fromId").value;
     const to_id = document.getElementById("toId").value;
     const description = document.getElementById("linkDescription").value;
-    const weight = parseFloat(document.getElementById("linkWeight").value) || 0;
+    const weight = 0.4 * (30 - (parseFloat(document.getElementById("linkWeight").value) || 0));
   
     fetch(`${apiBase}/links`, {
       method: "POST",
@@ -39,7 +39,7 @@ function loadGraph() {
 
 // Add pagination state
 let currentPage = 1;
-const rowsPerPage = 10;
+const rowsPerPage = 15;
 let filteredData = null; // Store filtered data globally
 
 // Update loadNotesTable to handle pagination for both filtered and unfiltered data
@@ -625,8 +625,8 @@ function drawMindMap(data) {
         const root = stratify(hierarchyData);
 
         const treeLayout = d3.tree()
-            .size([height * 0.9, width * 0.5])
-            .separation((a, b) => (a.parent === b.parent ? 2 : 3));
+            .size([height * 0.9, width * 0.7])
+            .separation((a, b) => (a.parent === b.parent ? 5 : 7));
 
         treeLayout(root);
 
@@ -656,7 +656,7 @@ function drawMindMap(data) {
 
         // Add the circle elements
         circles.append("circle")
-            .attr("r", 6)
+            .attr("r", 8)
             .attr("fill", d => d.depth === 0 ? "#ff5722" : 
                               d.depth === 1 ? "#2196f3" : "#4caf50")
             .attr("class", "node-circle")
@@ -710,7 +710,7 @@ function drawMindMap(data) {
 
         // Update circle groups with enhanced hover functionality
         circles.append("circle")
-            .attr("r", 6)
+            .attr("r", 8)
             .attr("fill", d => d.depth === 0 ? "#ff5722" : 
                               d.depth === 1 ? "#2196f3" : "#4caf50")
             .attr("class", "node-circle")
@@ -780,7 +780,7 @@ function drawMindMap(data) {
                 d3.select(this)
                     .transition()
                     .duration(200)
-                    .attr("r", 6);
+                    .attr("r", 8);
 
                 // Hide tooltip
                 tooltip.transition()
@@ -805,7 +805,7 @@ function drawMindMap(data) {
             .each(function(d) {
                 const text = d3.select(this);
                 const content = d.data.content;
-                const maxCharsPerLine = 10;
+                const maxCharsPerLine = 20;
                 const maxLines = 2;
                 
                 // Function to check if a string contains CJK characters
@@ -883,10 +883,10 @@ function drawMindMap(data) {
                 d3.select(this)
                     .append("text")
                     .attr("class", "link-count")
-                    .attr("x", 8)
-                    .attr("y", -8)
+                    .attr("x", 5)
+                    .attr("y", -5)
                     .text(linkCount)
-                    .attr("font-size", "10px")
+                    .attr("font-size", "8px")
                     .attr("fill", "#666")
                     .style("font-weight", "bold")
                     .style("text-shadow", 
@@ -896,7 +896,7 @@ function drawMindMap(data) {
 
         // Add zoom behavior
         const zoom = d3.zoom()
-            .scaleExtent([0.5, 2])
+            .scaleExtent([0.2, 5])
             .on("zoom", (event) => {
                 g.attr("transform", event.transform);
             });
