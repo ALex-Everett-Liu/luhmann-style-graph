@@ -16,6 +16,55 @@
     svg {
       border: 1px solid #ccc;
     }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .node-circle { cursor: pointer; transition: r 0.2s; }
+    .node-circle:hover { r: 14; }
+
+    .node-text { font-size: 12px; user-select: none; }
+
+    .link {
+        stroke: #999;
+        stroke-width: 2;
+        fill: none;
+    }
+    .pagination-controls {
+        margin-top: 10px; /* Add some space above pagination */
+        display: flex;
+        justify-content: center; /* Center the pagination controls */
+        align-items: center; /* Vertically align items */
+    }
+
+    .pagination-controls button {
+        margin: 0 5px; /* Add spacing between buttons */
+        padding: 5px 10px;
+        cursor: pointer;
+    }
+
+    .pagination-controls button:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .page-number-button {
+        padding: 5px 8px;
+        margin: 0 2px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        background-color: white;
+    }
+
+    .page-number-button.active {
+        background-color: #007bff; /* Example: Blue for active page */
+        color: white;
+        border-color: #007bff;
+    }
+
+    .page-number-button:disabled {
+        opacity: 0.7;
+        cursor: default;
+    }
   </style>
 </head>
 <body>
@@ -28,20 +77,37 @@
     <input type="text" id="noteParentId" placeholder="Parent ID (optional)" />
     <button type="submit">Add Note</button>
   </form>
+
+  <!-- Add view toggle buttons -->
+    <div class="view-toggle">
+        <button onclick="showView('table')">Table View</button>
+        <button onclick="showView('graph')">Graph View</button>
+        <button onclick="showView('mindmap')">Mind Map</button>
+    </div>
+    
+    <!-- Add mind map container -->
+    <div id="mindmap-container" class="view" style="display: none;">
+        <svg id="mindmap" width="1200" height="800"></svg>
+    </div>
   
 
   <!-- Form to add links -->
-  <form id="linkForm">
-    <label>
-      From Note ID:
-      <input type="text" id="fromId" required>
-    </label>
-    <label>
-      To Note ID:
-      <input type="text" id="toId" required>
-    </label>
-    <button type="submit">Add Link</button>
-  </form>
+    <form id="linkForm">
+        <label>From ID: <input type="text" id="fromId" required></label>
+        <label>To ID: <input type="text" id="toId" required></label>
+        <label>Description: <input type="text" id="linkDescription"></label>
+        <label>Weight (0-100): 
+            <input 
+              type="number" 
+              id="linkWeight" 
+              min="0" 
+              max="100" 
+              step="0.1"
+              value="1.0"
+            >
+        </label>
+        <button type="submit">Add Link</button>
+    </form>
 
   <h2>Filter</h2>
     <div id="filterSection">
@@ -51,23 +117,45 @@
     </div>
 
   <h2>Parent-Child Table</h2>
-    <table id="notesTable" border="1" cellpadding="10">
-        <thead>
-        <tr>
-            <th>Child ID</th>
-            <th>Child Content</th>
-            <th>Parent ID</th>
-            <th>Parent Content</th>
-        </tr>
-        </thead>
-        <tbody>
-        <!-- Rows will be dynamically inserted here -->
-        </tbody>
-    </table>
+    <div class="table-container">
+        <table id="noteTable">
+            <thead>
+                <tr>
+                    <th>Child ID</th>
+                    <th>Child Content</th>
+                    <th>Parent ID</th>
+                    <th>Parent Content</th>
+                    <th>Weight</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Table rows will be inserted here by JavaScript -->
+            </tbody>
+        </table>
+        <div id="pagination" class="pagination-controls">
+            <!-- Pagination controls (buttons, page numbers) will be added here by JavaScript -->
+        </div>
+    </div>
 
+    <svg id="graph" class="view" width="800" height="600"></svg>
 
   <h2>Graph Visualization</h2>
   <svg width="800" height="600"></svg>
+
+  <div id="legend">
+    <h4>Weight Scale</h4>
+    <div class="legend-item">
+      <div class="line-example" style="width:50px; height:1px; background:#99c2ff"></div> 0
+    </div>
+    <div class="legend-item">
+      <div class="line-example" style="width:50px; height:5px; background:#3385ff"></div> 10
+    </div>
+    <div class="legend-item">
+      <div class="line-example" style="width:50px; height:10px; background:#0047b3"></div> 20
+    </div>
+  </div>
+
+
 
   <script src="script.js"></script>
 </body>

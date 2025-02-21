@@ -37,8 +37,11 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS links (
       from_id TEXT,
       to_id TEXT,
+      description TEXT,
+      weight REAL DEFAULT 1.0,
       FOREIGN KEY (from_id) REFERENCES notes (id),
-      FOREIGN KEY (to_id) REFERENCES notes (id)
+      FOREIGN KEY (to_id) REFERENCES notes (id),
+      PRIMARY KEY (from_id, to_id)
     )
   `);
 });
@@ -62,11 +65,22 @@ app.post("/api/notes", (req, res) => {
 
 // 2. Add a link between notes
 app.post("/api/links", (req, res) => {
-  const { from_id, to_id } = req.body;
-  db.run("INSERT INTO links (from_id, to_id) VALUES (?, ?)", [from_id, to_id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ message: "Link added successfully!" });
-  });
+    const { from_id, to_id, description, weight } = req.body;
+    const weightValue = parseFloat(weight || 1.0);
+  
+    // Validate weight range
+    if (weightValue < 0 || weightValue > 100) {
+      return res.status(400).json({ error: "Weight must be between 0 and 100" });
+    }
+  
+    db.run(
+      "INSERT INTO links (from_id, to_id, description, weight) VALUES (?, ?, ?, ?)",
+      [from_id, to_id, description || null, weightValue],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(201).json({ message: "Link added successfully!" });
+      }
+    );
 });
 
 // 3. Get all notes and links
@@ -142,16 +156,98 @@ app.get("/api/notes-table", (req, res) => {
     });
 });
 
+// server.js (modified GET /api/notes endpoint)
+
+app.get('/api/notes', async (req, res) => {
+    const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
+    const pageSize = parseInt(req.query.pageSize) || 10; // Default page size of 10
+
+    if (isNaN(page) || isNaN(pageSize) || page < 1 || pageSize < 1) {
+        return res.status(400).json({ error: 'Invalid page or pageSize parameters.' });
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    try {
+        const notes = await db.all(`
+            SELECT
+                n1.id AS child_id,
+                n1.content AS child_content,
+                n2.id AS parent_id,
+                n2.content AS parent_content,
+                l.weight
+            FROM notes n1
+            LEFT JOIN links l ON n1.id = l.to_id
+            LEFT JOIN notes n2 ON l.from_id = n2.id
+            ORDER BY n1.id
+            LIMIT ? OFFSET ?; -- Add LIMIT and OFFSET for pagination
+        `, [pageSize, offset]);
+
+        const totalNotesResult = await db.get("SELECT COUNT(*) AS total FROM notes");
+        const totalNotes = totalNotesResult.total;
+        const totalPages = Math.ceil(totalNotes / pageSize);
+
+        res.json({
+            notes: notes,
+            page: page,
+            pageSize: pageSize,
+            totalNotes: totalNotes,
+            totalPages: totalPages
+        });
+
+    } catch (error) {
+        console.error('Error fetching notes with pagination:', error);
+        res.status(500).json({ error: 'Failed to fetch notes.' });
+    }
+});
+
+
+app.get("/api/hierarchy", (req, res) => {
+    db.all(`
+      WITH RECURSIVE hierarchy(
+        id, 
+        content,
+        parent_id,
+        depth
+      ) AS (
+        SELECT 
+          id,
+          content,
+          parent_id,
+          0
+        FROM notes
+        WHERE parent_id IS NULL
+        
+        UNION ALL
+        
+        SELECT
+          n.id,
+          n.content,
+          n.parent_id,
+          h.depth + 1
+        FROM notes n
+        JOIN hierarchy h ON n.parent_id = h.id
+      )
+      SELECT * FROM hierarchy
+    `, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  });
+
 // Recursive descendant query endpoint
 app.get("/api/filter/:nodeId", (req, res) => {
     const nodeId = req.params.nodeId;
-    
+  
     const query = `
-      WITH RECURSIVE descendants(id) AS (
-        SELECT id FROM notes WHERE id = ?
+      WITH RECURSIVE descendants(id, depth) AS (
+        SELECT id, 0 
+        FROM notes 
+        WHERE id = ?
         UNION ALL
-        SELECT n.id FROM notes n
-        INNER JOIN descendants d ON n.parent_id = d.id
+        SELECT n.id, d.depth + 1
+        FROM notes n
+        JOIN descendants d ON n.parent_id = d.id
       )
       SELECT 
         n.id AS child_id,
@@ -161,21 +257,35 @@ app.get("/api/filter/:nodeId", (req, res) => {
       FROM descendants d
       JOIN notes n ON d.id = n.id
       LEFT JOIN notes p ON n.parent_id = p.id
+      ORDER BY d.depth ASC;
     `;
   
     db.all(query, [nodeId], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       if (rows.length === 0) return res.status(404).json({ error: "Node not found" });
-      
-      // Get related links
+  
       const filteredIds = rows.map(r => r.child_id);
+      
+      // Get links that connect filtered nodes
       db.all(
-        `SELECT * FROM links WHERE from_id IN (${filteredIds.map(() => '?').join(',')}) 
-         AND to_id IN (${filteredIds.map(() => '?').join(',')})`,
+        `SELECT * FROM links 
+         WHERE from_id IN (${filteredIds.map(() => '?').join(',')}) 
+           AND to_id IN (${filteredIds.map(() => '?').join(',')})`,
         [...filteredIds, ...filteredIds],
         (err, links) => {
           if (err) return res.status(500).json({ error: err.message });
-          res.json({ nodes: rows, links });
+          
+          // Include the root node's parent if exists
+          const rootNode = rows.find(r => r.child_id === nodeId);
+          if (rootNode?.parent_id) {
+            links.push({ from_id: rootNode.parent_id, to_id: nodeId });
+          }
+  
+          res.json({ 
+            nodes: rows,
+            links: links,
+            rootId: nodeId 
+          });
         }
       );
     });
