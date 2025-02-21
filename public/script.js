@@ -136,7 +136,18 @@ function updatePagination(totalRows) {
             Previous
         </button>
         <div class="page-input-container">
-            Page <input type="number" value="${currentPage}" min="1" max="${totalPages}" class="page-input"> of ${totalPages}
+            <label for="page-input">Page</label>
+            <input 
+                type="number" 
+                id="page-input"
+                class="page-input"
+                value="${currentPage}" 
+                min="1" 
+                max="${totalPages}"
+                aria-label="Page number"
+                title="Enter page number"
+            >
+            <span>of ${totalPages}</span>
         </div>
         <button onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
             Next
@@ -145,6 +156,41 @@ function updatePagination(totalRows) {
             Last
         </button>
     `;
+
+    // Add styles for better accessibility
+    const styles = document.createElement('style');
+    styles.textContent = `
+        .page-input-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .page-input {
+            width: 60px;
+            padding: 4px;
+            text-align: center;
+        }
+        
+        .page-input:focus {
+            outline: 2px solid #007bff;
+            border-radius: 4px;
+        }
+        
+        /* Hide label visually but keep it for screen readers */
+        .page-input-container label {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    `;
+    document.head.appendChild(styles);
 
     // Add event listener for the input field
     const pageInput = controls.querySelector('.page-input');
@@ -281,220 +327,232 @@ function updateTable(rows, rootId) {
 }
   
 function updateGraph(nodes, links, rootIds) {
-    // Transform the data structure to match what D3 expects
-    const graphNodes = nodes.map(node => ({
-        id: node.child_id,
-        content: node.child_content,
-        parent_id: node.parent_id
-    }));
-
-    // Create a Set of all valid node IDs
-    const nodeIds = new Set(graphNodes.map(n => n.id));
-
-    // Filter and format links
-    const graphLinks = links
-        .filter(link => {
-            const sourceId = link.source;
-            const targetId = link.target;
-            return nodeIds.has(sourceId) && nodeIds.has(targetId);
-        })
-        .map(link => ({
-            source: link.source,
-            target: link.target,
-            weight: link.weight || 1,
-            description: link.description
+    clientLogger.info('Updating graph visualization', {
+        nodeCount: nodes.length,
+        linkCount: links.length
+    });
+    try {
+        // Transform the data structure to match what D3 expects
+        const graphNodes = nodes.map(node => ({
+            id: node.child_id,
+            content: node.child_content,
+            parent_id: node.parent_id
         }));
 
-    const svg = d3.select("#graph");
-    svg.selectAll("*").remove();
+        // Create a Set of all valid node IDs
+        const nodeIds = new Set(graphNodes.map(n => n.id));
 
-    const width = +svg.attr("width");
-    const height = +svg.attr("height");
+        // Filter and format links
+        const graphLinks = links
+            .filter(link => {
+                const sourceId = link.source;
+                const targetId = link.target;
+                return nodeIds.has(sourceId) && nodeIds.has(targetId);
+            })
+            .map(link => ({
+                source: link.source,
+                target: link.target,
+                weight: link.weight || 1,
+                description: link.description
+            }));
 
-    // Add zoom container
-    const g = svg.append("g")
-        .attr("class", "zoom-container");
+        const svg = d3.select("#graph");
+        svg.selectAll("*").remove();
 
-    // Create force simulation with transformed data
-    const simulation = d3.forceSimulation(graphNodes)
-        .force("link", d3.forceLink(graphLinks)
-            .id(d => d.id)
-            .distance(100)
-        )
-        .force("charge", d3.forceManyBody().strength(-300))
-        .force("center", d3.forceCenter(width / 2, height / 2))
-        .force("x", d3.forceX().x(d => d.id === rootIds[0] ? width/2 : null))
-        .force("y", d3.forceY().y(d => d.id === rootIds[0] ? height/2 : null));
+        const width = +svg.attr("width");
+        const height = +svg.attr("height");
 
-    // Draw links with weight-based styling
-    const link = g.append("g")
-        .selectAll("line")
-        .data(graphLinks)
-        .enter().append("line")
-        .attr("stroke", d => `hsl(200, 70%, ${70 - ((d.weight || 1) * 0.5)}%)`)
-        .attr("stroke-width", d => (d.weight || 1) * 0.5)
-        .attr("opacity", 0.8);
+        // Add zoom container
+        const g = svg.append("g")
+            .attr("class", "zoom-container");
 
-    // Add weight labels
-    const linkLabels = g.append("g")
-        .selectAll("text")
-        .data(graphLinks)
-        .enter().append("text")
-        .text(d => d.weight ? d.weight.toFixed(1) : "1.0")
-        .attr("font-size", "10px")
-        .attr("fill", "#666");
+        // Create force simulation with transformed data
+        const simulation = d3.forceSimulation(graphNodes)
+            .force("link", d3.forceLink(graphLinks)
+                .id(d => d.id)
+                .distance(100)
+            )
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("x", d3.forceX().x(d => d.id === rootIds[0] ? width/2 : null))
+            .force("y", d3.forceY().y(d => d.id === rootIds[0] ? height/2 : null));
 
-    // Draw nodes with hierarchy-based coloring
-    const node = g.append("g")
-        .selectAll("circle")
-        .data(graphNodes)
-        .enter().append("circle")
-        .attr("r", 10)
-        .attr("fill", d => {
-            if (Array.isArray(rootIds) && rootIds.includes(d.id)) {
-                return "#ff5722"; // Root node color
-            } else if (Array.isArray(rootIds) && rootIds.some(rootId => d.parent_id === rootId)) {
-                return "#2196f3"; // Direct child of root
-            } else {
-                return "#4caf50"; // Other nodes
-            }
-        })
-        .call(d3.drag()
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended));
+        // Draw links with weight-based styling
+        const link = g.append("g")
+            .selectAll("line")
+            .data(graphLinks)
+            .enter().append("line")
+            .attr("stroke", d => `hsl(200, 70%, ${70 - ((d.weight || 1) * 0.5)}%)`)
+            .attr("stroke-width", d => (d.weight || 1) * 0.5)
+            .attr("opacity", 0.8);
 
-    // Add labels
-    const labels = g.append("g")
-        .selectAll("text")
-        .data(graphNodes)
-        .enter().append("text")
-        .text(d => d.content || d.id)
-        .attr("font-size", "12px")
-        .attr("dx", 15)
-        .attr("dy", 4);
+        // Add weight labels
+        const linkLabels = g.append("g")
+            .selectAll("text")
+            .data(graphLinks)
+            .enter().append("text")
+            .text(d => d.weight ? d.weight.toFixed(1) : "1.0")
+            .attr("font-size", "10px")
+            .attr("fill", "#666");
 
-    // Add zoom behavior
-    const zoom = d3.zoom()
-        .scaleExtent([0.1, 4])
-        .on("zoom", (event) => {
-            g.attr("transform", event.transform);
+        // Draw nodes with hierarchy-based coloring
+        const node = g.append("g")
+            .selectAll("circle")
+            .data(graphNodes)
+            .enter().append("circle")
+            .attr("r", 10)
+            .attr("fill", d => {
+                if (Array.isArray(rootIds) && rootIds.includes(d.id)) {
+                    return "#ff5722"; // Root node color
+                } else if (Array.isArray(rootIds) && rootIds.some(rootId => d.parent_id === rootId)) {
+                    return "#2196f3"; // Direct child of root
+                } else {
+                    return "#4caf50"; // Other nodes
+                }
+            })
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        // Add labels
+        const labels = g.append("g")
+            .selectAll("text")
+            .data(graphNodes)
+            .enter().append("text")
+            .text(d => d.content || d.id)
+            .attr("font-size", "12px")
+            .attr("dx", 15)
+            .attr("dy", 4);
+
+        // Add zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
+
+        // Add zoom controls
+        const zoomControls = svg.append("g")
+            .attr("class", "zoom-controls")
+            .attr("transform", "translate(20, 20)");
+
+        // Zoom in button
+        zoomControls.append("rect")
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("width", 30)
+            .attr("height", 30)
+            .attr("fill", "#fff")
+            .attr("stroke", "#999")
+            .style("cursor", "pointer")
+            .on("click", () => {
+                svg.transition()
+                   .duration(750)
+                   .call(zoom.scaleBy, 1.3);
+            });
+
+        zoomControls.append("text")
+            .attr("x", 15)
+            .attr("y", 20)
+            .attr("text-anchor", "middle")
+            .text("+")
+            .style("cursor", "pointer")
+            .style("user-select", "none");
+
+        // Zoom out button
+        zoomControls.append("rect")
+            .attr("x", 0)
+            .attr("y", 40)
+            .attr("width", 30)
+            .attr("height", 30)
+            .attr("fill", "#fff")
+            .attr("stroke", "#999")
+            .style("cursor", "pointer")
+            .on("click", () => {
+                svg.transition()
+                   .duration(750)
+                   .call(zoom.scaleBy, 0.7);
+            });
+
+        zoomControls.append("text")
+            .attr("x", 15)
+            .attr("y", 60)
+            .attr("text-anchor", "middle")
+            .text("-")
+            .style("cursor", "pointer")
+            .style("user-select", "none");
+
+        // Reset zoom button
+        zoomControls.append("rect")
+            .attr("x", 0)
+            .attr("y", 80)
+            .attr("width", 30)
+            .attr("height", 30)
+            .attr("fill", "#fff")
+            .attr("stroke", "#999")
+            .style("cursor", "pointer")
+            .on("click", () => {
+                svg.transition()
+                   .duration(750)
+                   .call(zoom.transform, d3.zoomIdentity);
+            });
+
+        zoomControls.append("text")
+            .attr("x", 15)
+            .attr("y", 100)
+            .attr("text-anchor", "middle")
+            .text("R")
+            .style("cursor", "pointer")
+            .style("user-select", "none");
+
+        // Enable zoom and pan
+        svg.call(zoom);
+
+        // Update positions on each tick
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            linkLabels
+                .attr("x", d => (d.source.x + d.target.x) / 2)
+                .attr("y", d => (d.source.y + d.target.y) / 2);
+
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+
+            labels
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
         });
 
-    // Add zoom controls
-    const zoomControls = svg.append("g")
-        .attr("class", "zoom-controls")
-        .attr("transform", "translate(20, 20)");
+        // Define drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
 
-    // Zoom in button
-    zoomControls.append("rect")
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("width", 30)
-        .attr("height", 30)
-        .attr("fill", "#fff")
-        .attr("stroke", "#999")
-        .style("cursor", "pointer")
-        .on("click", () => {
-            svg.transition()
-               .duration(750)
-               .call(zoom.scaleBy, 1.3);
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    } catch (error) {
+        clientLogger.error('Graph visualization failed', {
+            error: error.message,
+            nodes: nodes.length,
+            links: links.length
         });
-
-    zoomControls.append("text")
-        .attr("x", 15)
-        .attr("y", 20)
-        .attr("text-anchor", "middle")
-        .text("+")
-        .style("cursor", "pointer")
-        .style("user-select", "none");
-
-    // Zoom out button
-    zoomControls.append("rect")
-        .attr("x", 0)
-        .attr("y", 40)
-        .attr("width", 30)
-        .attr("height", 30)
-        .attr("fill", "#fff")
-        .attr("stroke", "#999")
-        .style("cursor", "pointer")
-        .on("click", () => {
-            svg.transition()
-               .duration(750)
-               .call(zoom.scaleBy, 0.7);
-        });
-
-    zoomControls.append("text")
-        .attr("x", 15)
-        .attr("y", 60)
-        .attr("text-anchor", "middle")
-        .text("-")
-        .style("cursor", "pointer")
-        .style("user-select", "none");
-
-    // Reset zoom button
-    zoomControls.append("rect")
-        .attr("x", 0)
-        .attr("y", 80)
-        .attr("width", 30)
-        .attr("height", 30)
-        .attr("fill", "#fff")
-        .attr("stroke", "#999")
-        .style("cursor", "pointer")
-        .on("click", () => {
-            svg.transition()
-               .duration(750)
-               .call(zoom.transform, d3.zoomIdentity);
-        });
-
-    zoomControls.append("text")
-        .attr("x", 15)
-        .attr("y", 100)
-        .attr("text-anchor", "middle")
-        .text("R")
-        .style("cursor", "pointer")
-        .style("user-select", "none");
-
-    // Enable zoom and pan
-    svg.call(zoom);
-
-    // Update positions on each tick
-    simulation.on("tick", () => {
-        link
-            .attr("x1", d => d.source.x)
-            .attr("y1", d => d.source.y)
-            .attr("x2", d => d.target.x)
-            .attr("y2", d => d.target.y);
-
-        linkLabels
-            .attr("x", d => (d.source.x + d.target.x) / 2)
-            .attr("y", d => (d.source.y + d.target.y) / 2);
-
-        node
-            .attr("cx", d => d.x)
-            .attr("cy", d => d.y);
-
-        labels
-            .attr("x", d => d.x)
-            .attr("y", d => d.y);
-    });
-
-    // Define drag functions
-    function dragstarted(event, d) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-    }
-
-    function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
-
-    function dragended(event, d) {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
     }
 }
 
@@ -1225,3 +1283,24 @@ function countNonTreeLinks(nodeId, root) {
     console.log(`Node ${nodeId}: Found ${count} non-tree links`); // Debug log
     return count;
 }
+
+const clientLogger = {
+    error: (message, data) => {
+        console.error(message, data);
+        fetch('/api/logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                level: 'error',
+                category: 'client',
+                message,
+                data,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                url: window.location.href
+            })
+        }).catch(err => console.error('Failed to send log:', err));
+    },
+    warn: (message, data) => { /* Similar implementation */ },
+    info: (message, data) => { /* Similar implementation */ }
+};

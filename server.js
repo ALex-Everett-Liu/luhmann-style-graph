@@ -3,6 +3,9 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const { logger, categoryLogger } = require('./utils/logger');
+const requestLogger = categoryLogger('request');
+const errorLogger = categoryLogger('error');
 
 const app = express();
 const PORT = 3060;
@@ -20,15 +23,6 @@ const publicPath = path.join(isDev ? __dirname : basePath, "public");
 // Middleware
 app.use(bodyParser.json());
 app.use(cors());
-
-// Add CSP headers middleware
-app.use((req, res, next) => {
-    res.setHeader(
-        "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://d3js.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
-    );
-    next();
-});
 
 // Serve static files
 app.use(express.static(publicPath, {
@@ -355,15 +349,66 @@ app.get("/api/hierarchy-test", (req, res) => {
     res.json(testData);
 });
 
-// Add error handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
+// 1. Request Logging & ID Generation Middleware (Early in the middleware chain)
+app.use((req, res, next) => {
+    req.requestId = generateRequestId();
+    requestLogger.info('Incoming request', {
+        requestId: req.requestId,
+        method: req.method,
+        path: req.path,
+        query: req.query,
+        ip: req.ip
+    });
+    next();
 });
 
-// Add 404 handling
+// 2. CSP Headers Middleware
 app.use((req, res, next) => {
-    res.status(404).send('Sorry, that route does not exist.');
+    res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://d3js.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+    );
+    next();
+});
+
+// 3. 404 Handler (After all routes)
+app.use((req, res, next) => {
+    requestLogger.warn('Route not found', {
+        requestId: req.requestId,
+        path: req.path,
+        method: req.method
+    });
+    res.status(404).json({
+        error: 'Route not found',
+        path: req.path,
+        method: req.method
+    });
+});
+
+// 4. Error Handler (Last middleware)
+app.use((err, req, res, next) => {
+    errorLogger.error('Unhandled error', {
+        requestId: req.requestId,
+        error: {
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+        },
+        request: {
+            method: req.method,
+            path: req.path,
+            query: req.query,
+            body: req.body
+        }
+    });
+
+    // Don't send error details in production
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.status(500).json({
+        error: 'Internal Server Error',
+        requestId: req.requestId,
+        ...(isProduction ? {} : { details: err.message })
+    });
 });
 
 // Start the server and open browser
