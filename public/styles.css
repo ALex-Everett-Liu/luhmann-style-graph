@@ -21,4 +21,16 @@
 
 .view-toggle button:hover {
     background: #e5e5e5;
+}
+
+#graph svg {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+#graph {
+    width: 100%;
+    height: 700px;
+    overflow: hidden;
 } 

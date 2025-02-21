@@ -328,103 +328,87 @@ function updateTable(rows, rootId) {
   
 function updateGraph(nodes, links, rootIds) {
     try {
-        clientLogger?.info('Updating graph visualization', {
-            nodeCount: nodes.length,
-            linkCount: links.length
-        });
-        
-        // Transform the data structure to match what D3 expects
+        // Transform the data structure for D3
         const graphNodes = nodes.map(node => ({
-            id: node.child_id,
-            content: node.child_content,
+            id: node.child_id || node.id,
+            content: node.child_content || node.content,
             parent_id: node.parent_id
         }));
 
-        // Create a Set of all valid node IDs
-        const nodeIds = new Set(graphNodes.map(n => n.id));
+        const graphLinks = links.map(link => ({
+            source: link.from_id || link.source,
+            target: link.to_id || link.target,
+            weight: link.weight || 1
+        }));
 
-        // Filter and format links
-        const graphLinks = links
-            .filter(link => {
-                const sourceId = link.source;
-                const targetId = link.target;
-                return nodeIds.has(sourceId) && nodeIds.has(targetId);
-            })
-            .map(link => ({
-                source: link.source,
-                target: link.target,
-                weight: link.weight || 1,
-                description: link.description
-            }));
-
-        const svg = d3.select("#graph");
+        // Clear existing SVG content
+        const svg = d3.select("#graph svg");
         svg.selectAll("*").remove();
 
-        const width = +svg.attr("width");
-        const height = +svg.attr("height");
+        // Set up SVG dimensions
+        const width = svg.node().getBoundingClientRect().width;
+        const height = svg.node().getBoundingClientRect().height;
 
         // Add zoom container
         const g = svg.append("g")
             .attr("class", "zoom-container");
 
-        // Create force simulation with transformed data
+        // Create force simulation
         const simulation = d3.forceSimulation(graphNodes)
             .force("link", d3.forceLink(graphLinks)
                 .id(d => d.id)
-                .distance(100)
-            )
-            .force("charge", d3.forceManyBody().strength(-300))
+                .distance(100))
+            .force("charge", d3.forceManyBody()
+                .strength(-200))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("x", d3.forceX().x(d => d.id === rootIds[0] ? width/2 : null))
-            .force("y", d3.forceY().y(d => d.id === rootIds[0] ? height/2 : null));
+            .force("collision", d3.forceCollide().radius(30));
 
-        // Draw links with weight-based styling
+        // Create the links
         const link = g.append("g")
             .selectAll("line")
             .data(graphLinks)
-            .enter().append("line")
-            .attr("stroke", d => `hsl(200, 70%, ${70 - ((d.weight || 1) * 0.5)}%)`)
-            .attr("stroke-width", d => (d.weight || 1) * 0.5)
-            .attr("opacity", 0.8);
+            .join("line")
+            .attr("stroke", "#999")
+            .attr("stroke-width", d => Math.sqrt(d.weight || 1));
 
-        // Add weight labels
-        const linkLabels = g.append("g")
-            .selectAll("text")
-            .data(graphLinks)
-            .enter().append("text")
-            .text(d => d.weight ? d.weight.toFixed(1) : "1.0")
-            .attr("font-size", "10px")
-            .attr("fill", "#666");
-
-        // Draw nodes with hierarchy-based coloring
-        const node = g.append("g")
-            .selectAll("circle")
+        // Create node groups
+        const nodeGroup = g.append("g")
+            .selectAll("g")
             .data(graphNodes)
-            .enter().append("circle")
-            .attr("r", 10)
-            .attr("fill", d => {
-                if (Array.isArray(rootIds) && rootIds.includes(d.id)) {
-                    return "#ff5722"; // Root node color
-                } else if (Array.isArray(rootIds) && rootIds.some(rootId => d.parent_id === rootId)) {
-                    return "#2196f3"; // Direct child of root
-                } else {
-                    return "#4caf50"; // Other nodes
-                }
-            })
+            .join("g")
             .call(d3.drag()
                 .on("start", dragstarted)
                 .on("drag", dragged)
                 .on("end", dragended));
 
-        // Add labels
-        const labels = g.append("g")
-            .selectAll("text")
-            .data(graphNodes)
-            .enter().append("text")
-            .text(d => d.content || d.id)
+        // Add circles to nodes
+        nodeGroup.append("circle")
+            .attr("r", 10)
+            .attr("fill", d => {
+                if (rootIds && rootIds.includes(d.id)) {
+                    return "#ff5722"; // Root node color
+                } else if (rootIds && rootIds.some(rootId => d.parent_id === rootId)) {
+                    return "#2196f3"; // Direct child of root
+                } else {
+                    return "#69b3a2"; // Default color
+                }
+            });
+
+        // Add labels to nodes
+        nodeGroup.append("text")
+            .text(d => {
+                const content = d.content || '';
+                return content.length > 20 ? content.substring(0, 17) + '...' : content;
+            })
+            .attr("x", 15)
+            .attr("y", 5)
+            .attr("font-family", "Arial")
             .attr("font-size", "12px")
-            .attr("dx", 15)
-            .attr("dy", 4);
+            .attr("fill", "#333");
+
+        // Add title for full content on hover
+        nodeGroup.append("title")
+            .text(d => d.content);
 
         // Add zoom behavior
         const zoom = d3.zoom()
@@ -433,73 +417,6 @@ function updateGraph(nodes, links, rootIds) {
                 g.attr("transform", event.transform);
             });
 
-        // Add zoom controls
-        const zoomControls = svg.append("g")
-            .attr("class", "zoom-controls")
-            .attr("transform", "translate(20, 20)");
-
-        // Zoom in button
-        zoomControls.append("rect")
-            .attr("x", 0)
-            .attr("y", 0)
-            .attr("width", 30)
-            .attr("height", 30)
-            .attr("fill", "#fff")
-            .attr("stroke", "#999")
-            .style("cursor", "pointer")
-            .on("click", () => {
-                svg.transition()
-                   .duration(750)
-                   .call(zoom.scaleBy, 1.3);
-            });
-
-        zoomControls.append("text")
-            .attr("x", 15)
-            .attr("y", 20)
-            .attr("text-anchor", "middle")
-            .text("+")
-            .style("cursor", "pointer")
-            .style("user-select", "none");
-
-        // Zoom out button
-        zoomControls.append("rect")
-            .attr("x", 0)
-            .attr("y", 40)
-            .attr("width", 30)
-            .attr("height", 30)
-            .attr("fill", "#fff")
-            .attr("stroke", "#999")
-            .style("cursor", "pointer")
-            .on("click", () => {
-                svg.transition()
-                   .duration(750)
-                   .call(zoom.scaleBy, 0.7);
-            });
-
-        // Reset zoom button
-        zoomControls.append("rect")
-            .attr("x", 0)
-            .attr("y", 80)
-            .attr("width", 30)
-            .attr("height", 30)
-            .attr("fill", "#fff")
-            .attr("stroke", "#999")
-            .style("cursor", "pointer")
-            .on("click", () => {
-                svg.transition()
-                   .duration(750)
-                   .call(zoom.transform, d3.zoomIdentity);
-            });
-
-        zoomControls.append("text")
-            .attr("x", 15)
-            .attr("y", 100)
-            .attr("text-anchor", "middle")
-            .text("R")
-            .style("cursor", "pointer")
-            .style("user-select", "none");
-
-        // Enable zoom and pan
         svg.call(zoom);
 
         // Update positions on each tick
@@ -510,20 +427,10 @@ function updateGraph(nodes, links, rootIds) {
                 .attr("x2", d => d.target.x)
                 .attr("y2", d => d.target.y);
 
-            linkLabels
-                .attr("x", d => (d.source.x + d.target.x) / 2)
-                .attr("y", d => (d.source.y + d.target.y) / 2);
-
-            node
-                .attr("cx", d => d.x)
-                .attr("cy", d => d.y);
-
-            labels
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
+            nodeGroup.attr("transform", d => `translate(${d.x},${d.y})`);
         });
 
-        // Define drag functions
+        // Drag functions
         function dragstarted(event, d) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
@@ -540,12 +447,10 @@ function updateGraph(nodes, links, rootIds) {
             d.fx = null;
             d.fy = null;
         }
+
     } catch (error) {
-        clientLogger?.error('Graph visualization failed', {
-            error: error.message,
-            nodes: nodes.length,
-            links: links.length
-        });
+        console.error("Error in updateGraph:", error);
+        clientLogger?.error('Graph visualization failed', { error: error.message });
     }
 }
 
