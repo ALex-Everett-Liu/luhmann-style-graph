@@ -327,11 +327,12 @@ function updateTable(rows, rootId) {
 }
   
 function updateGraph(nodes, links, rootIds) {
-    clientLogger.info('Updating graph visualization', {
-        nodeCount: nodes.length,
-        linkCount: links.length
-    });
     try {
+        clientLogger?.info('Updating graph visualization', {
+            nodeCount: nodes.length,
+            linkCount: links.length
+        });
+        
         // Transform the data structure to match what D3 expects
         const graphNodes = nodes.map(node => ({
             id: node.child_id,
@@ -475,14 +476,6 @@ function updateGraph(nodes, links, rootIds) {
                    .call(zoom.scaleBy, 0.7);
             });
 
-        zoomControls.append("text")
-            .attr("x", 15)
-            .attr("y", 60)
-            .attr("text-anchor", "middle")
-            .text("-")
-            .style("cursor", "pointer")
-            .style("user-select", "none");
-
         // Reset zoom button
         zoomControls.append("rect")
             .attr("x", 0)
@@ -548,7 +541,7 @@ function updateGraph(nodes, links, rootIds) {
             d.fy = null;
         }
     } catch (error) {
-        clientLogger.error('Graph visualization failed', {
+        clientLogger?.error('Graph visualization failed', {
             error: error.message,
             nodes: nodes.length,
             links: links.length
@@ -560,47 +553,29 @@ let mindmapData = null;
 
 function showView(viewName) {
     // Hide all views
-    document.querySelectorAll('.view').forEach(el => {
-        el.style.display = 'none';
+    document.querySelectorAll('.view').forEach(view => {
+        view.style.display = 'none';
     });
 
-    // Show selected view
-    const viewElement = viewName === 'mindmap' ? 'mindmap-container' : 
-                       viewName === 'table' ? 'notesTable' : 'graph';
-    
-    document.getElementById(viewElement).style.display = 'block';
+    // Show the selected view
+    let viewElement;
+    switch (viewName) {
+        case 'table':
+            viewElement = document.getElementById('notesTable');
+            loadNotesTable();
+            break;
+        case 'graph':
+            viewElement = document.getElementById('graph');
+            loadGraph();
+            break;
+        case 'mindmap':
+            viewElement = document.getElementById('mindmap-container');
+            loadMindMap();
+            break;
+    }
 
-    // If there's an active filter and filtered data, use it
-    if (currentFilter && filteredData) {
-        switch (viewName) {
-            case 'mindmap':
-                const hierarchyData = filteredData.nodes.map(node => ({
-                    id: node.child_id,
-                    content: node.child_content,
-                    parent_id: node.parent_id
-                }));
-                drawMindMap(hierarchyData);
-                break;
-            case 'table':
-                displayTablePage(filteredData.nodes, filteredData.rootIds);
-                break;
-            case 'graph':
-                updateGraph(filteredData.nodes, filteredData.links || [], filteredData.rootIds);
-                break;
-        }
-    } else {
-        // Load appropriate data if no filter
-        switch (viewName) {
-            case 'mindmap':
-                loadMindMap();
-                break;
-            case 'table':
-                loadNotesTable();
-                break;
-            case 'graph':
-                loadGraph();
-                break;
-        }
+    if (viewElement) {
+        viewElement.style.display = 'block';
     }
 }
 
@@ -1285,22 +1260,34 @@ function countNonTreeLinks(nodeId, root) {
 }
 
 const clientLogger = {
-    error: (message, data) => {
+    error: (message, data = {}) => {
         console.error(message, data);
-        fetch('/api/logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                level: 'error',
-                category: 'client',
-                message,
-                data,
-                timestamp: new Date().toISOString(),
-                userAgent: navigator.userAgent,
-                url: window.location.href
-            })
-        }).catch(err => console.error('Failed to send log:', err));
+        try {
+            if (window.electron?.sendLog) {
+                window.electron.sendLog('error', { message, data });
+            }
+        } catch (err) {
+            console.error('Failed to send log:', err);
+        }
     },
-    warn: (message, data) => { /* Similar implementation */ },
-    info: (message, data) => { /* Similar implementation */ }
+    warn: (message, data = {}) => {
+        console.warn(message, data);
+        try {
+            if (window.electron?.sendLog) {
+                window.electron.sendLog('warn', { message, data });
+            }
+        } catch (err) {
+            console.warn('Failed to send log:', err);
+        }
+    },
+    info: (message, data = {}) => {
+        console.info(message, data);
+        try {
+            if (window.electron?.sendLog) {
+                window.electron.sendLog('info', { message, data });
+            }
+        } catch (err) {
+            console.info('Failed to send log:', err);
+        }
+    }
 };

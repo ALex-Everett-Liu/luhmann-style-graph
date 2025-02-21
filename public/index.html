@@ -116,62 +116,62 @@
     <button type="submit">Add Note</button>
   </form>
 
-  <!-- Add view toggle buttons -->
-    <div class="view-toggle">
-        <button onclick="showView('table')">Table View</button>
-        <button onclick="showView('graph')">Graph View</button>
-        <button onclick="showView('mindmap')">Mind Map</button>
-    </div>
-    
-    <!-- Add mind map container -->
-    <div id="mindmap-container" class="view">
-        <svg id="mindmap" width="1200" height="800" style="background-color: #f9f9f9;"></svg>
-    </div>
-  
+  <!-- Update the view toggle buttons section -->
+  <div class="view-toggle">
+    <button onclick="showView('table')">Table View</button>
+    <button onclick="showView('graph')">Graph View</button>
+    <button onclick="showView('mindmap')">Mind Map</button>
+  </div>
+
+  <!-- Make sure all view containers have the 'view' class -->
+  <div id="notesTable" class="view">
+    <table border="1" cellpadding="10">
+      <thead>
+        <tr>
+          <th>Child ID</th>
+          <th>Child Content</th>
+          <th>Parent ID</th>
+          <th>Parent Content</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Rows will be dynamically inserted here -->
+      </tbody>
+    </table>
+  </div>
+
+  <div id="graph" class="view">
+    <svg width="1000" height="700"></svg>
+  </div>
+
+  <div id="mindmap-container" class="view">
+    <svg id="mindmap" width="1200" height="800" style="background-color: #f9f9f9;"></svg>
+  </div>
 
   <!-- Form to add links -->
-    <form id="linkForm">
-        <label>From ID: <input type="text" id="fromId" required></label>
-        <label>To ID: <input type="text" id="toId" required></label>
-        <label>Description: <input type="text" id="linkDescription"></label>
-        <label>Weight (0-100): 
-            <input 
-              type="number" 
-              id="linkWeight" 
-              min="0" 
-              max="100" 
-              step="0.1"
-              value="1.0"
-            >
-        </label>
-        <button type="submit">Add Link</button>
-    </form>
+  <form id="linkForm">
+    <label>From ID: <input type="text" id="fromId" required></label>
+    <label>To ID: <input type="text" id="toId" required></label>
+    <label>Description: <input type="text" id="linkDescription"></label>
+    <label>Weight (0-100): 
+      <input 
+        type="number" 
+        id="linkWeight" 
+        min="0" 
+        max="100" 
+        step="0.1"
+        value="1.0"
+      >
+    </label>
+    <button type="submit">Add Link</button>
+  </form>
 
   <h2>Filter</h2>
-    <div id="filterSection">
-        <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
-        <button onclick="applyFilter()">Apply Filter</button>
-        <button onclick="clearFilter()">Clear Filter</button>
-    </div>
-
-  <h2>Parent-Child Table</h2>
-    <div id="notesTable" class="view">
-        <table id="notesTable" border="1" cellpadding="10">
-            <thead>
-            <tr>
-                <th>Child ID</th>
-                <th>Child Content</th>
-                <th>Parent ID</th>
-                <th>Parent Content</th>
-            </tr>
-            </thead>
-            <tbody>
-            <!-- Rows will be dynamically inserted here -->
-            </tbody>
-        </table>
-    </div>
-
-  <svg id="graph" class="view" width="1000" height="700"></svg>
+  <div id="filterSection">
+    <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
+    <button onclick="applyFilter()">Apply Filter</button>
+    <button onclick="clearFilter()">Clear Filter</button>
+  </div>
 
   <h2>Graph Visualization</h2>
   <svg width="400" height="200"></svg>
@@ -188,8 +188,6 @@
       <div class="line-example" style="width:50px; height:10px; background:#0047b3"></div> 20
     </div>
   </div>
-
-
 
   <script src="script.js"></script>
 </body>
