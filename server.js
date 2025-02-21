@@ -284,59 +284,68 @@ app.get("/api/hierarchy", (req, res) => {
     });
 });
 
-// Recursive descendant query endpoint
-app.get("/api/filter/:nodeId", (req, res) => {
-    const nodeId = req.params.nodeId;
-  
+// Update the filter endpoint to handle multiple node IDs
+app.get("/api/filter-multiple", (req, res) => {
+    const nodeIds = req.query.nodes.split(',');
+    
     const query = `
-      WITH RECURSIVE descendants(id, depth) AS (
-        SELECT id, 0 
+      WITH RECURSIVE descendants(id, root_id, depth) AS (
+        -- Start with the selected nodes
+        SELECT id, id as root_id, 0 
         FROM notes 
-        WHERE id = ?
+        WHERE id IN (${nodeIds.map(() => '?').join(',')})
+        
         UNION ALL
-        SELECT n.id, d.depth + 1
+        
+        -- Add their descendants
+        SELECT n.id, d.root_id, d.depth + 1
         FROM notes n
         JOIN descendants d ON n.parent_id = d.id
       )
-      SELECT 
+      SELECT DISTINCT
         n.id AS child_id,
         n.content AS child_content,
         n.parent_id,
-        p.content AS parent_content
+        p.content AS parent_content,
+        d.root_id
       FROM descendants d
       JOIN notes n ON d.id = n.id
       LEFT JOIN notes p ON n.parent_id = p.id
-      ORDER BY d.depth ASC;
+      ORDER BY d.root_id, d.depth ASC;
     `;
-  
-    db.all(query, [nodeId], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (rows.length === 0) return res.status(404).json({ error: "Node not found" });
-  
-      const filteredIds = rows.map(r => r.child_id);
-      
-      // Get links that connect filtered nodes
-      db.all(
-        `SELECT * FROM links 
-         WHERE from_id IN (${filteredIds.map(() => '?').join(',')}) 
-           AND to_id IN (${filteredIds.map(() => '?').join(',')})`,
-        [...filteredIds, ...filteredIds],
-        (err, links) => {
-          if (err) return res.status(500).json({ error: err.message });
-          
-          // Include the root node's parent if exists
-          const rootNode = rows.find(r => r.child_id === nodeId);
-          if (rootNode?.parent_id) {
-            links.push({ from_id: rootNode.parent_id, to_id: nodeId });
-          }
-  
-          res.json({ 
-            nodes: rows,
-            links: links,
-            rootId: nodeId 
-          });
-        }
-      );
+    
+    db.all(query, nodeIds, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (rows.length === 0) return res.status(404).json({ error: "Nodes not found" });
+        
+        const filteredIds = rows.map(r => r.child_id);
+        
+        // Get links that connect filtered nodes
+        db.all(
+            `SELECT * FROM links 
+             WHERE from_id IN (${filteredIds.map(() => '?').join(',')}) 
+               AND to_id IN (${filteredIds.map(() => '?').join(',')})`,
+            [...filteredIds, ...filteredIds],
+            (err, links) => {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                // Include the root nodes' parents if they exist
+                const rootNodes = nodeIds;
+                const parentLinks = [];
+                
+                rows.forEach(row => {
+                    if (rootNodes.includes(row.child_id) && row.parent_id) {
+                        parentLinks.push({ from_id: row.parent_id, to_id: row.child_id });
+                    }
+                });
+                
+                res.json({ 
+                    nodes: rows,
+                    links: [...links, ...parentLinks],
+                    rootIds: nodeIds 
+                });
+            }
+        );
     });
 });
 

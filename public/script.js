@@ -255,32 +255,143 @@ function loadGraph() {
 }
   
 
-// Load and display the parent-child table
+// Add pagination state
+let currentPage = 1;
+const rowsPerPage = 10;
+let filteredData = null; // Store filtered data globally
+
+// Update loadNotesTable to handle pagination for both filtered and unfiltered data
 function loadNotesTable() {
-    const url = currentFilter 
-      ? `${apiBase}/filter/${currentFilter}` 
-      : `${apiBase}/notes-table`;
-  
-    fetch(url)
-      .then((response) => response.json())
-      .then((data) => {
-        const rows = currentFilter ? data.nodes : data;
-        const tableBody = document.querySelector("#notesTable tbody");
-        tableBody.innerHTML = "";
-  
-        rows.forEach((row) => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${row.child_id}</td>
-            <td>${row.child_content}</td>
-            <td>${row.parent_id || "-"}</td>
-            <td>${row.parent_content || "-"}</td>
-          `;
-          tableBody.appendChild(tr);
-        });
-      });
+    if (currentFilter) {
+        // If we have filtered data, use it with client-side pagination
+        if (filteredData) {
+            displayTablePage(filteredData.nodes, filteredData.rootId);
+        } else {
+            // If filtered data isn't loaded yet, fetch it
+            fetch(`${apiBase}/filter/${currentFilter}`)
+                .then(response => response.json())
+                .then(data => {
+                    filteredData = data;
+                    displayTablePage(data.nodes, data.rootId);
+                });
+        }
+    } else {
+        // For unfiltered data, use server-side pagination
+        fetch(`${apiBase}/notes-table?page=${currentPage}&limit=${rowsPerPage}`)
+            .then(response => response.json())
+            .then(data => {
+                displayTablePage(data.rows, null, data.total);
+                filteredData = null; // Clear filtered data
+            });
+    }
 }
-  
+
+// Function to display a page of the table
+function displayTablePage(rows, rootId, totalRows = null) {
+    const tableBody = document.querySelector("#notesTable tbody");
+    tableBody.innerHTML = "";
+
+    if (currentFilter) {
+        // For filtered data, implement client-side pagination
+        const start = (currentPage - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+        const pageRows = rows.slice(start, end);
+
+        pageRows.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${row.child_id}</td>
+                <td>${row.child_content}</td>
+                <td>${row.parent_id || "-"}</td>
+                <td>${row.parent_content || "-"}</td>
+            `;
+            if (row.child_id === rootId) {
+                tr.style.backgroundColor = '#ffeeba';
+            }
+            tableBody.appendChild(tr);
+        });
+
+        // Update pagination with total filtered rows
+        updatePagination(rows.length);
+    } else {
+        // For unfiltered data, display as is (server-side pagination)
+        rows.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${row.child_id}</td>
+                <td>${row.child_content}</td>
+                <td>${row.parent_id || "-"}</td>
+                <td>${row.parent_content || "-"}</td>
+            `;
+            tableBody.appendChild(tr);
+        });
+
+        // Update pagination with total rows from server
+        updatePagination(totalRows);
+    }
+}
+
+// Update pagination controls with input field
+function updatePagination(totalRows) {
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+    const paginationDiv = document.getElementById('pagination-controls');
+    
+    // Create pagination controls if they don't exist
+    if (!paginationDiv) {
+        const table = document.getElementById('notesTable');
+        const newPaginationDiv = document.createElement('div');
+        newPaginationDiv.id = 'pagination-controls';
+        newPaginationDiv.className = 'pagination';
+        table.parentNode.insertBefore(newPaginationDiv, table.nextSibling);
+    }
+
+    const controls = document.getElementById('pagination-controls');
+    controls.innerHTML = `
+        <button onclick="changePage(1)" ${currentPage === 1 ? 'disabled' : ''}>
+            First
+        </button>
+        <button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+            Previous
+        </button>
+        <div class="page-input-container">
+            Page <input type="number" value="${currentPage}" min="1" max="${totalPages}" class="page-input"> of ${totalPages}
+        </div>
+        <button onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+            Next
+        </button>
+        <button onclick="changePage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>
+            Last
+        </button>
+    `;
+
+    // Add event listener for the input field
+    const pageInput = controls.querySelector('.page-input');
+    pageInput.addEventListener('change', (e) => {
+        let newPage = parseInt(e.target.value);
+        // Validate the input
+        if (newPage < 1) newPage = 1;
+        if (newPage > totalPages) newPage = totalPages;
+        if (newPage !== currentPage) {
+            changePage(newPage);
+        } else {
+            // Reset the input value if invalid
+            e.target.value = currentPage;
+        }
+    });
+
+    // Add event listener for Enter key
+    pageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.target.blur(); // Remove focus to trigger the change event
+        }
+    });
+}
+
+// Add page change handler
+function changePage(newPage) {
+    currentPage = newPage;
+    loadNotesTable();
+}
 
 document.getElementById("noteForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -305,7 +416,10 @@ let currentFilter = null;
 function applyFilter() {
     const nodeId = document.getElementById('filterInput').value.trim();
     if (!nodeId) return;
-  
+
+    currentFilter = nodeId;
+    currentPage = 1; // Reset to first page when filtering
+    
     fetch(`${apiBase}/filter/${nodeId}`)
         .then(response => {
             if (!response.ok) throw new Error('Filter failed');
@@ -317,21 +431,17 @@ function applyFilter() {
                 return;
             }
 
-            currentFilter = nodeId;
-
+            filteredData = data; // Store filtered data
             const activeView = document.querySelector('.view[style*="display: block"]').id;
             
             switch (activeView) {
                 case 'notesTable':
-                    updateTable(data.nodes, data.rootId);
+                    displayTablePage(data.nodes, data.rootId);
                     break;
                 case 'graph':
-                    // Ensure links array exists
-                    const links = data.links || [];
-                    updateGraph(data.nodes, links, data.rootId);
+                    updateGraph(data.nodes, data.links || [], data.rootId);
                     break;
                 case 'mindmap-container':
-                    // Transform the data for mind map
                     const hierarchyData = data.nodes.map(node => ({
                         id: node.child_id,
                         content: node.child_content,
@@ -349,12 +459,12 @@ function applyFilter() {
 
 function clearFilter() {
     currentFilter = null;
+    filteredData = null;
+    currentPage = 1; // Reset to first page when clearing filter
     document.getElementById('filterInput').value = '';
     
-    // Get the current active view
     const activeView = document.querySelector('.view[style*="display: block"]').id;
     
-    // Update the appropriate view based on which is active
     switch (activeView) {
         case 'notesTable':
             loadNotesTable();
@@ -388,7 +498,7 @@ function updateTable(rows, rootId) {
     });
 }
   
-function updateGraph(nodes, links, rootId) {
+function updateGraph(nodes, links, rootIds) {
     // Transform the data structure to match what D3 expects
     const graphNodes = nodes.map(node => ({
         id: node.child_id,
@@ -431,8 +541,8 @@ function updateGraph(nodes, links, rootId) {
         )
         .force("charge", d3.forceManyBody().strength(-300))
         .force("center", d3.forceCenter(width / 2, height / 2))
-        .force("x", d3.forceX().x(d => d.id === rootId ? width/2 : null))
-        .force("y", d3.forceY().y(d => d.id === rootId ? height/2 : null));
+        .force("x", d3.forceX().x(d => d.id === rootIds[0] ? width/2 : null))
+        .force("y", d3.forceY().y(d => d.id === rootIds[0] ? height/2 : null));
 
     // Draw links with weight-based styling
     const link = g.append("g")
@@ -458,8 +568,15 @@ function updateGraph(nodes, links, rootId) {
         .data(graphNodes)
         .enter().append("circle")
         .attr("r", 10)
-        .attr("fill", d => d.id === rootId ? "#ff5722" : 
-                          d.parent_id === rootId ? "#2196f3" : "#4caf50")
+        .attr("fill", d => {
+            if (Array.isArray(rootIds) && rootIds.includes(d.id)) {
+                return "#ff5722"; // Root node color
+            } else if (Array.isArray(rootIds) && rootIds.some(rootId => d.parent_id === rootId)) {
+                return "#2196f3"; // Direct child of root
+            } else {
+                return "#4caf50"; // Other nodes
+            }
+        })
         .call(d3.drag()
             .on("start", dragstarted)
             .on("drag", dragged)
@@ -770,3 +887,169 @@ function testMindMap() {
 // Initial load
 
 showView('table'); // Start with table view
+
+// Add selected filters state
+let selectedFilters = new Set();
+
+// Update the filter section HTML in your index.html
+function updateFilterUI() {
+    const filterSection = document.getElementById('filterSection');
+    filterSection.innerHTML = `
+        <div class="filter-input-group">
+            <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
+            <button onclick="addFilter()">Add Filter</button>
+            <button onclick="clearFilters()">Clear All</button>
+        </div>
+        <div id="activeFilters" class="active-filters"></div>
+    `;
+    
+    // Display active filters
+    const activeFiltersDiv = document.getElementById('activeFilters');
+    activeFiltersDiv.innerHTML = '';
+    selectedFilters.forEach(filter => {
+        const filterTag = document.createElement('span');
+        filterTag.className = 'filter-tag';
+        filterTag.innerHTML = `
+            ${filter}
+            <button onclick="removeFilter('${filter}')">&times;</button>
+        `;
+        activeFiltersDiv.appendChild(filterTag);
+    });
+}
+
+// Add a new filter
+function addFilter() {
+    const filterInput = document.getElementById('filterInput');
+    const nodeId = filterInput.value.trim();
+    
+    if (nodeId && !selectedFilters.has(nodeId)) {
+        selectedFilters.add(nodeId);
+        filterInput.value = '';
+        updateFilterUI();
+        applyFilters();
+    }
+}
+
+// Remove a filter
+function removeFilter(nodeId) {
+    selectedFilters.delete(nodeId);
+    updateFilterUI();
+    if (selectedFilters.size === 0) {
+        clearFilters();
+    } else {
+        applyFilters();
+    }
+}
+
+// Clear all filters
+function clearFilters() {
+    selectedFilters.clear();
+    currentFilter = null;
+    filteredData = null;
+    currentPage = 1;
+    updateFilterUI();
+    
+    const activeView = document.querySelector('.view[style*="display: block"]').id;
+    switch (activeView) {
+        case 'notesTable':
+            loadNotesTable();
+            break;
+        case 'graph':
+            loadGraph();
+            break;
+        case 'mindmap-container':
+            loadMindMap();
+            break;
+    }
+}
+
+// Apply multiple filters
+function applyFilters() {
+    if (selectedFilters.size === 0) return;
+    
+    const nodeIds = Array.from(selectedFilters).join(',');
+    currentFilter = nodeIds; // Store current filter state
+    currentPage = 1; // Reset to first page when filtering
+    
+    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Filter failed');
+            return response.json();
+        })
+        .then(data => {
+            if (!data.nodes || data.nodes.length === 0) {
+                alert('No nodes found for these filters');
+                return;
+            }
+
+            filteredData = data;
+            const activeView = document.querySelector('.view[style*="display: block"]').id;
+            
+            switch (activeView) {
+                case 'notesTable':
+                    displayTablePage(data.nodes, data.rootIds);
+                    break;
+                case 'graph':
+                    updateGraph(data.nodes, data.links || [], data.rootIds);
+                    break;
+                case 'mindmap-container':
+                    const hierarchyData = data.nodes.map(node => ({
+                        id: node.child_id,
+                        content: node.child_content,
+                        parent_id: node.parent_id
+                    }));
+                    drawMindMap(hierarchyData);
+                    break;
+            }
+        })
+        .catch(error => {
+            console.error('Filter error:', error);
+            alert('Error applying filters: ' + error.message);
+        });
+}
+
+// Add styles for filter tags
+const filterStyles = document.createElement('style');
+filterStyles.textContent = `
+    .filter-input-group {
+        margin-bottom: 10px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    
+    .active-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    
+    .filter-tag {
+        background: #e0e0e0;
+        padding: 4px 8px;
+        border-radius: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 14px;
+    }
+    
+    .filter-tag button {
+        border: none;
+        background: none;
+        color: #666;
+        cursor: pointer;
+        padding: 0 4px;
+        font-size: 16px;
+        line-height: 1;
+    }
+    
+    .filter-tag button:hover {
+        color: #000;
+    }
+`;
+document.head.appendChild(filterStyles);
+
+// Initialize filter UI when the page loads
+document.addEventListener('DOMContentLoaded', updateFilterUI);
