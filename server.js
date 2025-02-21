@@ -320,32 +320,26 @@ app.get("/api/filter-multiple", (req, res) => {
         
         const filteredIds = rows.map(r => r.child_id);
         
-        // Get links that connect filtered nodes
-        db.all(
-            `SELECT * FROM links 
-             WHERE from_id IN (${filteredIds.map(() => '?').join(',')}) 
-               AND to_id IN (${filteredIds.map(() => '?').join(',')})`,
-            [...filteredIds, ...filteredIds],
-            (err, links) => {
-                if (err) return res.status(500).json({ error: err.message });
-                
-                // Include the root nodes' parents if they exist
-                const rootNodes = nodeIds;
-                const parentLinks = [];
-                
-                rows.forEach(row => {
-                    if (rootNodes.includes(row.child_id) && row.parent_id) {
-                        parentLinks.push({ from_id: row.parent_id, to_id: row.child_id });
-                    }
-                });
-                
-                res.json({ 
-                    nodes: rows,
-                    links: [...links, ...parentLinks],
-                    rootIds: nodeIds 
-                });
-            }
-        );
+        // Get ALL links where either source or target is in our filtered nodes
+        const linksQuery = `
+            SELECT 
+                from_id as source,
+                to_id as target,
+                description,
+                weight
+            FROM links 
+            WHERE from_id IN (${filteredIds.map(() => '?').join(',')}) 
+               OR to_id IN (${filteredIds.map(() => '?').join(',')})`;
+        
+        db.all(linksQuery, [...filteredIds, ...filteredIds], (err, links) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            res.json({ 
+                nodes: rows,
+                links: links,
+                rootIds: nodeIds 
+            });
+        });
     });
 });
 
