@@ -23,16 +23,12 @@
 
   <!-- Form to add notes -->
   <form id="noteForm">
-    <label>
-      Note ID:
-      <input type="text" id="noteId" required>
-    </label>
-    <label>
-      Content:
-      <input type="text" id="noteContent" required>
-    </label>
+    <input type="text" id="noteId" placeholder="Note ID" required />
+    <input type="text" id="noteContent" placeholder="Note Content" required />
+    <input type="text" id="noteParentId" placeholder="Parent ID (optional)" />
     <button type="submit">Add Note</button>
   </form>
+  
 
   <!-- Form to add links -->
   <form id="linkForm">
@@ -46,6 +42,29 @@
     </label>
     <button type="submit">Add Link</button>
   </form>
+
+  <h2>Filter</h2>
+    <div id="filterSection">
+        <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
+        <button onclick="applyFilter()">Apply Filter</button>
+        <button onclick="clearFilter()">Clear Filter</button>
+    </div>
+
+  <h2>Parent-Child Table</h2>
+    <table id="notesTable" border="1" cellpadding="10">
+        <thead>
+        <tr>
+            <th>Child ID</th>
+            <th>Child Content</th>
+            <th>Parent ID</th>
+            <th>Parent Content</th>
+        </tr>
+        </thead>
+        <tbody>
+        <!-- Rows will be dynamically inserted here -->
+        </tbody>
+    </table>
+
 
   <h2>Graph Visualization</h2>
   <svg width="800" height="600"></svg>
