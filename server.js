@@ -7,15 +7,42 @@ const cors = require("cors");
 const app = express();
 const PORT = 3060;
 
-// 1. Fix database path for EXE
-const dbPath = path.join(
-    process.cwd(), // Use the EXE's directory
-    "zettelkasten2.db"
-);
+// Fix paths for packaged app
+const isDev = !process.pkg;
+const basePath = isDev ? process.cwd() : path.dirname(process.execPath);
+
+// Update database path
+const dbPath = path.join(basePath, "zettelkasten2.db");
+
+// Update static files path
+const publicPath = path.join(isDev ? __dirname : basePath, "public");
 
 // Middleware
 app.use(bodyParser.json());
 app.use(cors());
+
+// Add CSP headers middleware
+app.use((req, res, next) => {
+    res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://d3js.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+    );
+    next();
+});
+
+// Serve static files
+app.use(express.static(publicPath, {
+    setHeaders: (res, path) => {
+        // Set proper content type for JavaScript files
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        }
+        // Set proper content type for CSS files
+        if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        }
+    }
+}));
 
 // SQLite Database Setup
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -85,32 +112,34 @@ app.post("/api/links", (req, res) => {
 
 // 3. Get all notes and links
 app.get("/api/graph", (req, res) => {
-    const query = `
+    const nodesQuery = `
       SELECT 
-        n.id AS child_id,
-        n.content AS child_content,
-        n.parent_id,
-        p.content AS parent_content
+        n.id,
+        n.content,
+        n.parent_id
       FROM notes n
-      LEFT JOIN notes p ON n.parent_id = p.id
     `;
-  
-    db.all(query, [], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-  
-      // Format data for D3.js
-      const nodes = [];
-      const links = [];
-  
-      rows.forEach((row) => {
-        nodes.push({ id: row.child_id, content: row.child_content });
-  
-        if (row.parent_id) {
-          links.push({ source: row.parent_id, target: row.child_id });
-        }
-      });
-  
-      res.json({ nodes, links });
+
+    const linksQuery = `
+      SELECT 
+        from_id as source,
+        to_id as target,
+        description,
+        weight
+      FROM links
+    `;
+
+    db.all(nodesQuery, [], (err, nodes) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.all(linksQuery, [], (err, links) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            res.json({
+                nodes: nodes,
+                links: links
+            });
+        });
     });
 });
   
@@ -140,100 +169,120 @@ app.post("/api/notes/auto-parent", (req, res) => {
 
 // Fetch all notes and their parent-child relationships
 app.get("/api/notes-table", (req, res) => {
-    const query = `
-      SELECT 
-        n.id AS child_id,
-        n.content AS child_content,
-        n.parent_id,
-        p.content AS parent_content
-      FROM notes n
-      LEFT JOIN notes p ON n.parent_id = p.id
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // First get total count
+    const countQuery = `
+        SELECT COUNT(*) as total
+        FROM notes n
+        LEFT JOIN notes p ON n.parent_id = p.id
     `;
-  
-    db.all(query, [], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+
+    // Then get paginated data
+    const dataQuery = `
+        SELECT 
+            n.id AS child_id,
+            n.content AS child_content,
+            n.parent_id,
+            p.content AS parent_content
+        FROM notes n
+        LEFT JOIN notes p ON n.parent_id = p.id
+        ORDER BY n.id
+        LIMIT ? OFFSET ?
+    `;
+
+    db.get(countQuery, [], (err, countResult) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.all(dataQuery, [limit, offset], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            res.json({
+                rows: rows,
+                total: countResult.total,
+                page: page,
+                limit: limit
+            });
+        });
     });
 });
 
-// server.js (modified GET /api/notes endpoint)
-
-app.get('/api/notes', async (req, res) => {
-    const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
-    const pageSize = parseInt(req.query.pageSize) || 10; // Default page size of 10
-
-    if (isNaN(page) || isNaN(pageSize) || page < 1 || pageSize < 1) {
-        return res.status(400).json({ error: 'Invalid page or pageSize parameters.' });
-    }
-
-    const offset = (page - 1) * pageSize;
-
-    try {
-        const notes = await db.all(`
-            SELECT
-                n1.id AS child_id,
-                n1.content AS child_content,
-                n2.id AS parent_id,
-                n2.content AS parent_content,
-                l.weight
-            FROM notes n1
-            LEFT JOIN links l ON n1.id = l.to_id
-            LEFT JOIN notes n2 ON l.from_id = n2.id
-            ORDER BY n1.id
-            LIMIT ? OFFSET ?; -- Add LIMIT and OFFSET for pagination
-        `, [pageSize, offset]);
-
-        const totalNotesResult = await db.get("SELECT COUNT(*) AS total FROM notes");
-        const totalNotes = totalNotesResult.total;
-        const totalPages = Math.ceil(totalNotes / pageSize);
-
-        res.json({
-            notes: notes,
-            page: page,
-            pageSize: pageSize,
-            totalNotes: totalNotes,
-            totalPages: totalPages
-        });
-
-    } catch (error) {
-        console.error('Error fetching notes with pagination:', error);
-        res.status(500).json({ error: 'Failed to fetch notes.' });
-    }
-});
-
-
 app.get("/api/hierarchy", (req, res) => {
-    db.all(`
-      WITH RECURSIVE hierarchy(
-        id, 
-        content,
-        parent_id,
-        depth
-      ) AS (
+    const query = `
+      WITH RECURSIVE hierarchy AS (
+        -- Start with root nodes (those without parents)
         SELECT 
           id,
           content,
           parent_id,
-          0
-        FROM notes
+          0 as depth,
+          id as path
+        FROM notes 
         WHERE parent_id IS NULL
         
         UNION ALL
         
-        SELECT
+        -- Add children
+        SELECT 
           n.id,
           n.content,
           n.parent_id,
-          h.depth + 1
+          h.depth + 1,
+          h.path || '/' || n.id
         FROM notes n
         JOIN hierarchy h ON n.parent_id = h.id
       )
-      SELECT * FROM hierarchy
-    `, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+      SELECT 
+        id,
+        content,
+        parent_id,
+        depth,
+        path
+      FROM hierarchy
+      ORDER BY path;
+    `;
+
+    db.all(query, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        // Process the data to ensure a single root
+        const rootNodes = rows.filter(r => !r.parent_id);
+        
+        if (rootNodes.length > 1) {
+            // Create a new artificial root
+            const artificialRoot = {
+                id: "root",
+                content: "Root",
+                parent_id: null,
+                depth: 0,
+                path: "root"
+            };
+            
+            // Update all original root nodes to point to the artificial root
+            const processedRows = rows.map(row => {
+                if (!row.parent_id) {
+                    return {
+                        ...row,
+                        parent_id: "root",
+                        depth: row.depth + 1,
+                        path: `root/${row.id}`
+                    };
+                }
+                return row;
+            });
+            
+            // Add the artificial root to the beginning of the array
+            processedRows.unshift(artificialRoot);
+            
+            res.json(processedRows);
+        } else {
+            // If there's only one or no root, return the original data
+            res.json(rows);
+        }
     });
-  });
+});
 
 // Recursive descendant query endpoint
 app.get("/api/filter/:nodeId", (req, res) => {
@@ -291,11 +340,34 @@ app.get("/api/filter/:nodeId", (req, res) => {
     });
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+// Add this temporary test endpoint
+app.get("/api/hierarchy-test", (req, res) => {
+    // Sample test data
+    const testData = [
+        { id: "root", content: "Root", parent_id: null, depth: 0, path: "root" },
+        { id: "1", content: "First Node", parent_id: "root", depth: 1, path: "root/1" },
+        { id: "2", content: "Second Node", parent_id: "root", depth: 1, path: "root/2" },
+        { id: "1a", content: "Child of First", parent_id: "1", depth: 2, path: "root/1/1a" }
+    ];
+    res.json(testData);
 });
 
-// Serve static files from the "public" directory
-app.use(express.static(path.join(__dirname, "public")));
+// Add error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
+});
+
+// Add 404 handling
+app.use((req, res, next) => {
+    res.status(404).send('Sorry, that route does not exist.');
+});
+
+// Start the server and open browser
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+  // Optionally open browser automatically
+  const url = `http://localhost:${PORT}`;
+  console.log(`Open ${url} in your browser to use the application`);
+});
 
