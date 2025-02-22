@@ -1,4 +1,10 @@
 const apiBase = "http://localhost:3060/api";
+let currentLanguage = 'en';
+let currentFilter = null;
+let currentPage = 1;
+const rowsPerPage = 15;
+let filteredData = null;
+let selectedFilters = new Set();
 
 document.getElementById("linkForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -26,7 +32,7 @@ function loadGraph() {
         updateGraph(filteredData.nodes, filteredData.links || [], filteredData.rootIds);
     } else {
         // Load all data if no filter
-        fetch(`${apiBase}/graph`)
+        fetch(`${apiBase}/graph?lang=${currentLanguage}`)
             .then(response => response.json())
             .then(data => {
                 updateGraph(data.nodes, data.links || [], []);
@@ -37,11 +43,6 @@ function loadGraph() {
     }
 }
 
-// Add pagination state
-let currentPage = 1;
-const rowsPerPage = 15;
-let filteredData = null; // Store filtered data globally
-
 // Update loadNotesTable to handle pagination for both filtered and unfiltered data
 function loadNotesTable() {
     if (currentFilter) {
@@ -50,7 +51,7 @@ function loadNotesTable() {
             displayTablePage(filteredData.nodes, filteredData.rootId);
         } else {
             // If filtered data isn't loaded yet, fetch it
-            fetch(`${apiBase}/filter/${currentFilter}`)
+            fetch(`${apiBase}/filter/${currentFilter}?lang=${currentLanguage}`)
                 .then(response => response.json())
                 .then(data => {
                     filteredData = data;
@@ -59,7 +60,7 @@ function loadNotesTable() {
         }
     } else {
         // For unfiltered data, use server-side pagination
-        fetch(`${apiBase}/notes-table?page=${currentPage}&limit=${rowsPerPage}`)
+        fetch(`${apiBase}/notes-table?page=${currentPage}&limit=${rowsPerPage}&lang=${currentLanguage}`)
             .then(response => response.json())
             .then(data => {
                 displayTablePage(data.rows, null, data.total);
@@ -226,20 +227,20 @@ document.getElementById("noteForm").addEventListener("submit", (e) => {
   
     const id = document.getElementById("noteId").value;
     const content = document.getElementById("noteContent").value;
-    const parent_id = document.getElementById("noteParentId").value || null; // Get parent ID from the form
+    const content_zh = document.getElementById("noteContentZh").value;
+    const parent_id = document.getElementById("noteParentId").value;
   
     fetch(`${apiBase}/notes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, content, parent_id }), // Include parent_id in the request body
+      body: JSON.stringify({ id, content, content_zh, parent_id }),
     }).then(() => {
       alert("Note added!");
-      loadGraph(); // Reload the graph visualization
-      loadNotesTable(); // Reload the parent-child table
+      loadGraph();
+      loadNotesTable();
+      document.getElementById("noteForm").reset();
     });
 });
-
-let currentFilter = null;
 
 function applyFilter() {
     const nodeId = document.getElementById('filterInput').value.trim();
@@ -957,9 +958,6 @@ function testMindMap() {
 
 showView('table'); // Start with table view
 
-// Add selected filters state
-let selectedFilters = new Set();
-
 // Update the filter section HTML in your index.html
 function updateFilterUI() {
     const filterSection = document.getElementById('filterSection');
@@ -1123,7 +1121,10 @@ filterStyles.textContent = `
 document.head.appendChild(filterStyles);
 
 // Initialize filter UI when the page loads
-document.addEventListener('DOMContentLoaded', updateFilterUI);
+document.addEventListener('DOMContentLoaded', () => {
+    updateFilterUI();
+    showView('table'); // Start with table view
+});
 
 // Update the countNonTreeLinks function to be more explicit
 function countNonTreeLinks(nodeId, root) {
@@ -1196,3 +1197,25 @@ const clientLogger = {
         }
     }
 };
+
+// Add language toggle function
+function toggleLanguage() {
+    currentLanguage = currentLanguage === 'en' ? 'zh' : 'en';
+    // Update UI
+    document.getElementById('langToggle').textContent = 
+        currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
+    
+    // Reload current view
+    const activeView = document.querySelector('.view[style*="display: block"]').id;
+    switch (activeView) {
+        case 'notesTable':
+            loadNotesTable();
+            break;
+        case 'graph':
+            loadGraph();
+            break;
+        case 'mindmap-container':
+            loadMindMap();
+            break;
+    }
+}

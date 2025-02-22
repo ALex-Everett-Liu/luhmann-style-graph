@@ -50,6 +50,7 @@ module.exports = function createServer(electronApp) {
       CREATE TABLE IF NOT EXISTS notes (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
+        content_zh TEXT,
         parent_id TEXT,
         FOREIGN KEY (parent_id) REFERENCES notes (id)
       )
@@ -71,11 +72,11 @@ module.exports = function createServer(electronApp) {
 
     // 1. Add a new note
     app.post("/api/notes", (req, res) => {
-        const { id, content, parent_id } = req.body;
+        const { id, content, content_zh, parent_id } = req.body;
       
         db.prepare(`
-          INSERT INTO notes (id, content, parent_id) VALUES (?, ?, ?)
-        `).run(id, content, parent_id || null);
+          INSERT INTO notes (id, content, content_zh, parent_id) VALUES (?, ?, ?, ?)
+        `).run(id, content, content_zh || null, parent_id || null);
         res.status(201).json({ message: "Note added successfully!" });
     });
     
@@ -98,10 +99,12 @@ module.exports = function createServer(electronApp) {
 
     // 3. Get all notes and links
     app.get("/api/graph", (req, res) => {
+        const lang = req.query.lang || 'en';
+        
         const nodesQuery = `
           SELECT 
             n.id,
-            n.content,
+            ${lang === 'zh' ? 'n.content_zh as content' : 'n.content'},
             n.parent_id
           FROM notes n
         `;
@@ -151,6 +154,7 @@ module.exports = function createServer(electronApp) {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
+        const lang = req.query.lang || 'en';
 
         // First get total count
         const countQuery = `
@@ -163,9 +167,9 @@ module.exports = function createServer(electronApp) {
         const dataQuery = `
             SELECT 
                 n.id AS child_id,
-                n.content AS child_content,
+                ${lang === 'zh' ? 'n.content_zh' : 'n.content'} AS child_content,
                 n.parent_id,
-                p.content AS parent_content
+                ${lang === 'zh' ? 'p.content_zh' : 'p.content'} AS parent_content
             FROM notes n
             LEFT JOIN notes p ON n.parent_id = p.id
             ORDER BY n.id
