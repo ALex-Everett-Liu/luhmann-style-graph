@@ -1226,7 +1226,7 @@ async function handleMarkdownClick(nodeId) {
         modal.innerHTML = `
             <div class="markdown-modal-content">
                 <h3>Notes for Node ${nodeId}</h3>
-                <textarea id="markdown-content" rows="10" cols="50">${data.content}</textarea>
+                <textarea id="markdown-content" rows="50" cols="120">${data.content}</textarea>
                 <div class="markdown-modal-buttons">
                     <button onclick="saveMarkdown('${nodeId}')">Save</button>
                     <button onclick="closeMarkdownModal()">Close</button>
