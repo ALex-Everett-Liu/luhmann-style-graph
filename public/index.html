@@ -121,6 +121,51 @@
     .language-toggle button:hover {
       background: #e5e5e5;
     }
+
+    /* Terminal styles */
+    .terminal-container {
+        background-color: #1e1e1e;
+        border-radius: 6px;
+        padding: 20px;
+        margin: 20px 0;
+        font-family: 'Consolas', 'Monaco', monospace;
+        height: 400px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .terminal-output {
+        color: #ffffff;
+        flex-grow: 1;
+        overflow-y: auto;
+        margin-bottom: 10px;
+        white-space: pre-wrap;
+    }
+
+    .terminal-input-line {
+        display: flex;
+        align-items: center;
+        color: #ffffff;
+    }
+
+    .terminal-prompt {
+        color: #00ff00;
+        margin-right: 8px;
+    }
+
+    .terminal-input {
+        background: transparent;
+        border: none;
+        color: #ffffff;
+        font-family: inherit;
+        font-size: inherit;
+        flex-grow: 1;
+        outline: none;
+    }
+
+    .terminal-input:focus {
+        outline: none;
+    }
   </style>
 </head>
 <body>
@@ -140,16 +185,17 @@
     <button type="submit">Add Note</button>
   </form>
 
-  <!-- Update the view toggle buttons section -->
-  <div class="view-toggle">
+  <!-- Update view toggle buttons -->
+  <div class="view-controls">
     <button onclick="showView('table')">Table View</button>
     <button onclick="showView('graph')">Graph View</button>
     <button onclick="showView('mindmap')">Mind Map</button>
+    <button onclick="showView('terminal')">Terminal</button>
   </div>
 
-  <!-- Make sure all view containers have the 'view' class -->
+  <!-- Make sure view containers are properly structured -->
   <div id="notesTable" class="view">
-    <table border="1" cellpadding="10">
+    <table>
       <thead>
         <tr>
           <th>Child ID</th>
@@ -159,7 +205,7 @@
         </tr>
       </thead>
       <tbody>
-        <!-- Rows will be dynamically inserted here -->
+        <!-- Table content will be dynamically populated -->
       </tbody>
     </table>
   </div>
@@ -170,6 +216,16 @@
 
   <div id="mindmap-container" class="view">
     <svg id="mindmap" width="1500" height="1200" style="background-color: #f9f9f9;"></svg>
+  </div>
+
+  <div id="terminal" class="view">
+    <div class="terminal-container">
+        <div id="terminal-output" class="terminal-output"></div>
+        <div class="terminal-input-line">
+            <span class="terminal-prompt">zettel></span>
+            <input type="text" id="terminal-input" class="terminal-input" autocomplete="off" spellcheck="false">
+        </div>
+    </div>
   </div>
 
   <!-- Form to add links -->

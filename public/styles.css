@@ -1,26 +1,83 @@
 .view {
     display: none;
+    width: 100%;
+    margin-top: 20px;
 }
 
 .view.active {
     display: block;
 }
 
-.view-toggle {
+.view-controls {
     margin: 20px 0;
+    display: flex;
+    gap: 10px;
 }
 
-.view-toggle button {
+.view-controls button {
     padding: 8px 16px;
-    margin-right: 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     background: #f5f5f5;
     cursor: pointer;
 }
 
-.view-toggle button:hover {
+.view-controls button:hover {
     background: #e5e5e5;
+}
+
+#notesTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+#notesTable th,
+#notesTable td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+#notesTable th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+}
+
+#notesTable tr:hover {
+    background-color: #f9f9f9;
+}
+
+#notesTable .markdown-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 0 5px;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.pagination button {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.pagination button:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+}
+
+.pagination button:hover:not(:disabled) {
+    background-color: #e9e9e9;
 }
 
 #graph svg {
@@ -122,4 +179,101 @@ tr.has-markdown::after {
 .markdown-modal-buttons button:last-child {
     background: #f5f5f5;
     border: 1px solid #ddd;
+}
+
+/* Terminal styles */
+.terminal-container {
+    background-color: #1e1e1e;
+    border-radius: 6px;
+    padding: 20px;
+    margin: 20px 0;
+    font-family: 'Consolas', 'Monaco', monospace;
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-output {
+    color: #ffffff;
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.terminal-input-line {
+    display: flex;
+    align-items: center;
+    color: #ffffff;
+}
+
+.terminal-prompt {
+    color: #00ff00;
+    margin-right: 8px;
+}
+
+.terminal-input {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-family: inherit;
+    font-size: inherit;
+    flex-grow: 1;
+    outline: none;
+}
+
+.terminal-input:focus {
+    outline: none;
+}
+
+/* Filter section styles */
+#filterSection {
+    margin: 20px 0;
+}
+
+#filterSection input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+#filterSection button {
+    padding: 8px 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f5f5f5;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+#filterSection button:hover {
+    background: #e5e5e5;
+}
+
+/* Form styles */
+form {
+    margin: 20px 0;
+}
+
+form input[type="text"],
+form input[type="number"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+form button {
+    padding: 8px 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f5f5f5;
+    cursor: pointer;
+}
+
+form button:hover {
+    background: #e5e5e5;
 } 

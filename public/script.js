@@ -450,30 +450,35 @@ function updateGraph(nodes, links, rootIds) {
 let mindmapData = null;
 
 function showView(viewName) {
+    console.log('Switching to view:', viewName);
+    
     // Hide all views
     document.querySelectorAll('.view').forEach(view => {
         view.style.display = 'none';
     });
 
-    // Show the selected view
-    let viewElement;
-    switch (viewName) {
+    // Show selected view
+    let targetView;
+    switch(viewName) {
         case 'table':
-            viewElement = document.getElementById('notesTable');
-            loadNotesTable();
+            targetView = document.getElementById('notesTable');
+            loadNotesTable(); // Reload table data
             break;
         case 'graph':
-            viewElement = document.getElementById('graph');
-            loadGraph();
+            targetView = document.getElementById('graph');
+            loadGraph(); // Reload graph
             break;
         case 'mindmap':
-            viewElement = document.getElementById('mindmap-container');
-            loadMindMap();
+            targetView = document.getElementById('mindmap-container');
+            loadMindMap(); // Reload mindmap
+            break;
+        case 'terminal':
+            targetView = document.getElementById('terminal');
             break;
     }
 
-    if (viewElement) {
-        viewElement.style.display = 'block';
+    if (targetView) {
+        targetView.style.display = 'block';
     }
 }
 
@@ -1285,3 +1290,160 @@ function updateMarkdownIndicator(nodeId, hasMarkdown) {
         }
     }
 }
+
+// Terminal handling
+let terminalHistory = [];
+let historyIndex = -1;
+
+function initializeTerminal() {
+    const input = document.getElementById('terminal-input');
+    const output = document.getElementById('terminal-output');
+
+    input.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            const command = input.value.trim();
+            appendToTerminal(`zettel> ${command}`);
+            
+            if (command) {
+                terminalHistory.unshift(command);
+                historyIndex = -1;
+                await executeCommand(command);
+            }
+            
+            input.value = '';
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (historyIndex < terminalHistory.length - 1) {
+                historyIndex++;
+                input.value = terminalHistory[historyIndex];
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex > 0) {
+                historyIndex--;
+                input.value = terminalHistory[historyIndex];
+            } else if (historyIndex === 0) {
+                historyIndex = -1;
+                input.value = '';
+            }
+        }
+    });
+}
+
+function appendToTerminal(text) {
+    const output = document.getElementById('terminal-output');
+    output.innerHTML += text + '\n';
+    output.scrollTop = output.scrollHeight;
+}
+
+async function executeCommand(command) {
+    const [cmd, ...args] = command.split(' ');
+    
+    try {
+        switch (cmd) {
+            case 'add':
+                await handleAddNote();
+                break;
+            case 'link':
+                await handleAddLink();
+                break;
+            case 'list':
+                await handleList(args);
+                break;
+            case 'show':
+                await handleShow(args);
+                break;
+            case 'filter':
+                await handleFilter(args);
+                break;
+            case 'help':
+                showHelp();
+                break;
+            case 'clear':
+                document.getElementById('terminal-output').innerHTML = '';
+                break;
+            default:
+                appendToTerminal('Unknown command. Type "help" for available commands.');
+        }
+    } catch (error) {
+        appendToTerminal(`Error: ${error.message}`);
+    }
+}
+
+async function handleAddNote() {
+    const id = await terminalPrompt('Note ID: ');
+    const content = await terminalPrompt('Content: ');
+    const content_zh = await terminalPrompt('Chinese Content (optional): ');
+    const parent_id = await terminalPrompt('Parent ID (optional): ');
+
+    try {
+        const response = await fetch(`${apiBase}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, content, content_zh, parent_id })
+        });
+
+        if (!response.ok) throw new Error('Failed to add note');
+        appendToTerminal('Note added successfully!');
+        loadGraph(); // Refresh the graph
+    } catch (error) {
+        appendToTerminal(`Error: ${error.message}`);
+    }
+}
+
+function terminalPrompt(question) {
+    return new Promise((resolve) => {
+        appendToTerminal(question);
+        const input = document.getElementById('terminal-input');
+        const handler = (e) => {
+            if (e.key === 'Enter') {
+                const value = input.value.trim();
+                input.value = '';
+                appendToTerminal(value);
+                input.removeEventListener('keydown', handler);
+                resolve(value);
+            }
+        };
+        input.addEventListener('keydown', handler);
+    });
+}
+
+function showHelp() {
+    appendToTerminal(`
+Available Commands:
+==================
+add              Add a new note
+link             Create a link between notes
+list [page]      List all notes (paginated)
+show <note_id>   Show details of a specific note
+filter <note_id> Filter notes by ID
+help             Show this help message
+clear            Clear terminal output
+`);
+}
+
+// Update the event listeners for view buttons
+document.addEventListener('DOMContentLoaded', () => {
+    // Table View button
+    document.querySelector('button[onclick="showView(\'table\')"]').addEventListener('click', () => {
+        showView('table');
+    });
+
+    // Graph View button
+    document.querySelector('button[onclick="showView(\'graph\')"]').addEventListener('click', () => {
+        showView('graph');
+    });
+
+    // Mind Map button
+    document.querySelector('button[onclick="showView(\'mindmap\')"]').addEventListener('click', () => {
+        showView('mindmap');
+    });
+
+    // Terminal button
+    document.querySelector('button[onclick="showView(\'terminal\')"]').addEventListener('click', () => {
+        showView('terminal');
+    });
+
+    // Initialize terminal
+    initializeTerminal();
+});
