@@ -197,12 +197,14 @@ module.exports = function createServer(electronApp) {
     });
 
     app.get("/api/hierarchy", (req, res) => {
+        const lang = req.query.lang || 'en';
+        
         const query = `
           WITH RECURSIVE hierarchy AS (
             -- Start with root nodes (those without parents)
             SELECT 
               id,
-              content,
+              ${lang === 'zh' ? 'content_zh as content' : 'content'},
               parent_id,
               0 as depth,
               id as path
@@ -214,7 +216,7 @@ module.exports = function createServer(electronApp) {
             -- Add children
             SELECT 
               n.id,
-              n.content,
+              ${lang === 'zh' ? 'n.content_zh as content' : 'n.content'},
               n.parent_id,
               h.depth + 1,
               h.path || '/' || n.id
@@ -272,6 +274,7 @@ module.exports = function createServer(electronApp) {
     // Update the filter endpoint to handle multiple node IDs
     app.get("/api/filter-multiple", (req, res) => {
         const nodeIds = req.query.nodes.split(',');
+        const lang = req.query.lang || 'en';
         
         const query = `
           WITH RECURSIVE descendants(id, root_id, depth) AS (
@@ -289,9 +292,9 @@ module.exports = function createServer(electronApp) {
           )
           SELECT DISTINCT
             n.id AS child_id,
-            n.content AS child_content,
+            ${lang === 'zh' ? 'n.content_zh' : 'n.content'} AS child_content,
             n.parent_id,
-            p.content AS parent_content,
+            ${lang === 'zh' ? 'p.content_zh' : 'p.content'} AS parent_content,
             d.root_id
           FROM descendants d
           JOIN notes n ON d.id = n.id

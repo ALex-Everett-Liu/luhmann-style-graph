@@ -241,7 +241,7 @@ function applyFilter() {
     currentFilter = nodeId;
     currentPage = 1; // Reset to first page when filtering
     
-    fetch(`${apiBase}/filter/${nodeId}`)
+    fetch(`${apiBase}/filter/${nodeId}?lang=${currentLanguage}`)
         .then(response => {
             if (!response.ok) throw new Error('Filter failed');
             return response.json();
@@ -487,12 +487,13 @@ function loadMindMap() {
         }));
         drawMindMap(hierarchyData);
     } else {
-        fetch(`${apiBase}/hierarchy`)
+        // Add language parameter to the API call
+        fetch(`${apiBase}/hierarchy?lang=${currentLanguage}`)
             .then(response => response.json())
             .then(hierarchyData => {
                 console.log("Fetched hierarchy data:", hierarchyData);
-                // Also fetch links data if not filtered
-                return fetch(`${apiBase}/graph`)
+                // Also fetch links data if not filtered, with language parameter
+                return fetch(`${apiBase}/graph?lang=${currentLanguage}`)
                     .then(response => response.json())
                     .then(graphData => {
                         filteredData = {
@@ -1030,7 +1031,7 @@ function applyFilters() {
     currentFilter = nodeIds;
     currentPage = 1;
     
-    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}`)
+    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}&lang=${currentLanguage}`)
         .then(response => {
             if (!response.ok) throw new Error('Filter failed');
             return response.json();
