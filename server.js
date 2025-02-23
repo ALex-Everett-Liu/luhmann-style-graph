@@ -6,6 +6,7 @@ const cors = require("cors");
 const { logger, categoryLogger } = require('./utils/logger');
 const requestLogger = categoryLogger('request');
 const errorLogger = categoryLogger('error');
+const fs = require('fs').promises;
 
 // Export a function that creates and configures the Express app
 module.exports = function createServer(electronApp) {
@@ -23,6 +24,14 @@ module.exports = function createServer(electronApp) {
 
     // Update static files path
     const publicPath = path.join(isDev ? __dirname : process.resourcesPath, "public");
+
+    // Define markdown files directory
+    const markdownDir = isDev ? 
+        path.join(__dirname, 'markdown_files') : 
+        path.join(electronApp.getPath('userData'), 'markdown_files');
+
+    // Ensure markdown directory exists
+    fs.mkdir(markdownDir, { recursive: true }).catch(console.error);
 
     // Middleware
     app.use(bodyParser.json());
@@ -326,6 +335,55 @@ module.exports = function createServer(electronApp) {
             { id: "1a", content: "Child of First", parent_id: "1", depth: 2, path: "root/1/1a" }
         ];
         res.json(testData);
+    });
+
+    // Update the markdown endpoints
+    app.post('/api/markdown/:nodeId', async (req, res) => {
+        try {
+            const { nodeId } = req.params;
+            const { content } = req.body;
+            const filePath = path.join(markdownDir, `${nodeId}.md`);
+            
+            if (content !== undefined) {
+                // Save new content
+                await fs.writeFile(filePath, content, 'utf8');
+                res.json({ success: true });
+            } else {
+                // Read existing content or create default
+                try {
+                    const existingContent = await fs.readFile(filePath, 'utf8');
+                    res.json({ content: existingContent });
+                } catch {
+                    const defaultContent = `# Node ${nodeId}\n\nAdd your notes here...`;
+                    await fs.writeFile(filePath, defaultContent, 'utf8');
+                    res.json({ content: defaultContent });
+                }
+            }
+        } catch (error) {
+            errorLogger.error('Markdown file operation failed', { error });
+            res.status(500).json({ error: 'Failed to handle markdown file' });
+        }
+    });
+
+    // Add endpoint to get markdown content
+    app.get('/api/markdown/:nodeId', async (req, res) => {
+        try {
+            const { nodeId } = req.params;
+            const filePath = path.join(markdownDir, `${nodeId}.md`);
+            
+            try {
+                const content = await fs.readFile(filePath, 'utf8');
+                res.json({ content });
+            } catch {
+                // If file doesn't exist, return empty content
+                const defaultContent = `# Node ${nodeId}\n\nAdd your notes here...`;
+                await fs.writeFile(filePath, defaultContent, 'utf8');
+                res.json({ content: defaultContent });
+            }
+        } catch (error) {
+            errorLogger.error('Markdown read failed', { error });
+            res.status(500).json({ error: 'Failed to read markdown file' });
+        }
     });
 
     // 1. Request Logging & ID Generation Middleware (Early in the middleware chain)

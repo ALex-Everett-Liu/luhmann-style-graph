@@ -6,6 +6,11 @@ const rowsPerPage = 15;
 let filteredData = null;
 let selectedFilters = new Set();
 
+// Add this helper function at the top of your script.js
+function isElectron() {
+    return window.electron !== undefined;
+}
+
 document.getElementById("linkForm").addEventListener("submit", (e) => {
     e.preventDefault();
   
@@ -69,49 +74,36 @@ function loadNotesTable() {
     }
 }
 
-// Function to display a page of the table
+// Update the displayTablePage function to remove automatic existence checks
 function displayTablePage(rows, rootId, totalRows = null) {
     const tableBody = document.querySelector("#notesTable tbody");
     tableBody.innerHTML = "";
 
-    if (currentFilter) {
-        // For filtered data, implement client-side pagination
-        const start = (currentPage - 1) * rowsPerPage;
-        const end = start + rowsPerPage;
-        const pageRows = rows.slice(start, end);
+    rows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.setAttribute('data-node-id', row.child_id);
+        
+        tr.innerHTML = `
+            <td>
+                ${row.child_id}
+                <button class="markdown-button" onclick="handleMarkdownClick('${row.child_id}')">
+                    📝
+                </button>
+            </td>
+            <td>${row.child_content}</td>
+            <td>${row.parent_id || "-"}</td>
+            <td>${row.parent_content || "-"}</td>
+        `;
+        
+        if (row.child_id === rootId) {
+            tr.style.backgroundColor = '#ffeeba';
+        }
+        
+        tableBody.appendChild(tr);
+    });
 
-        pageRows.forEach(row => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${row.child_id}</td>
-                <td>${row.child_content}</td>
-                <td>${row.parent_id || "-"}</td>
-                <td>${row.parent_content || "-"}</td>
-            `;
-            if (row.child_id === rootId) {
-                tr.style.backgroundColor = '#ffeeba';
-            }
-            tableBody.appendChild(tr);
-        });
-
-        // Update pagination with total filtered rows
-        updatePagination(rows.length);
-    } else {
-        // For unfiltered data, display as is (server-side pagination)
-        rows.forEach(row => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${row.child_id}</td>
-                <td>${row.child_content}</td>
-                <td>${row.parent_id || "-"}</td>
-                <td>${row.parent_content || "-"}</td>
-            `;
-            tableBody.appendChild(tr);
-        });
-
-        // Update pagination with total rows from server
-        updatePagination(totalRows);
-    }
+    // Update pagination
+    updatePagination(totalRows || rows.length);
 }
 
 // Update pagination controls with input field
@@ -1217,5 +1209,78 @@ function toggleLanguage() {
         case 'mindmap-container':
             loadMindMap();
             break;
+    }
+}
+
+// Update handleMarkdownClick function
+async function handleMarkdownClick(nodeId) {
+    try {
+        // Get existing content
+        const response = await fetch(`${apiBase}/markdown/${nodeId}`);
+        const data = await response.json();
+        
+        // Create modal dialog
+        const modal = document.createElement('div');
+        modal.className = 'markdown-modal';
+        modal.innerHTML = `
+            <div class="markdown-modal-content">
+                <h3>Notes for Node ${nodeId}</h3>
+                <textarea id="markdown-content" rows="10" cols="50">${data.content}</textarea>
+                <div class="markdown-modal-buttons">
+                    <button onclick="saveMarkdown('${nodeId}')">Save</button>
+                    <button onclick="closeMarkdownModal()">Close</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Focus the textarea
+        document.getElementById('markdown-content').focus();
+        
+    } catch (error) {
+        console.error('Error handling markdown:', error);
+        alert('An error occurred while loading the notes');
+    }
+}
+
+// Add save function
+async function saveMarkdown(nodeId) {
+    try {
+        const content = document.getElementById('markdown-content').value;
+        
+        await fetch(`${apiBase}/markdown/${nodeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ content })
+        });
+        
+        closeMarkdownModal();
+        updateMarkdownIndicator(nodeId, true);
+    } catch (error) {
+        console.error('Error saving markdown:', error);
+        alert('An error occurred while saving the notes');
+    }
+}
+
+// Add close function
+function closeMarkdownModal() {
+    const modal = document.querySelector('.markdown-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Add this function to update the UI when a markdown file exists
+function updateMarkdownIndicator(nodeId, hasMarkdown) {
+    const row = document.querySelector(`tr[data-node-id="${nodeId}"]`);
+    if (row) {
+        if (hasMarkdown) {
+            row.classList.add('has-markdown');
+        } else {
+            row.classList.remove('has-markdown');
+        }
     }
 }
