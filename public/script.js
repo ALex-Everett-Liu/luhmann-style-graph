@@ -5,6 +5,21 @@ let currentPage = 1;
 const rowsPerPage = 15;
 let filteredData = null;
 let selectedFilters = new Set();
+let filterBookmarks = new Map();
+let totalRows = 0;
+
+const recentInputs = {
+    noteId: new Set(),
+    noteContent: new Set(),
+    noteContentZh: new Set(),
+    noteParentId: new Set(),
+    fromId: new Set(),
+    toId: new Set(),
+    linkDescription: new Set(),
+    filterInput: new Set()
+};
+
+const MAX_RECENT_ITEMS = 5;
 
 // Add this helper function at the top of your script.js
 function isElectron() {
@@ -17,7 +32,12 @@ document.getElementById("linkForm").addEventListener("submit", (e) => {
     const from_id = document.getElementById("fromId").value;
     const to_id = document.getElementById("toId").value;
     const description = document.getElementById("linkDescription").value;
-    const weight = 0.4 * (30 - (parseFloat(document.getElementById("linkWeight").value) || 0));
+    const weight = parseFloat(document.getElementById("linkWeight").value) || 0;
+
+    // Store recent inputs
+    addRecentInput('fromId', from_id);
+    addRecentInput('toId', to_id);
+    addRecentInput('linkDescription', description);
   
     fetch(`${apiBase}/links`, {
       method: "POST",
@@ -29,6 +49,76 @@ document.getElementById("linkForm").addEventListener("submit", (e) => {
       document.getElementById("linkForm").reset(); // Clear form
     });
 });
+
+// Add this function to handle storing recent inputs
+function addRecentInput(inputId, value) {
+    if (!value.trim()) return;
+    
+    const recent = recentInputs[inputId];
+    if (recent) {
+        recent.add(value);
+        if (recent.size > MAX_RECENT_ITEMS) {
+            const firstItem = recent.values().next().value;
+            recent.delete(firstItem);
+        }
+    }
+}
+
+// Add this function to create and show the dropdown
+function showDropdown(input, items) {
+    // Remove any existing dropdown
+    const existingDropdown = document.querySelector('.autocomplete-dropdown');
+    if (existingDropdown) {
+        existingDropdown.remove();
+    }
+
+    if (items.size === 0) return;
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    
+    Array.from(items).reverse().forEach(item => {
+        const option = document.createElement('div');
+        option.className = 'autocomplete-item';
+        option.textContent = item;
+        option.addEventListener('click', () => {
+            input.value = item;
+            dropdown.remove();
+        });
+        dropdown.appendChild(option);
+    });
+
+    // Position the dropdown below the input
+    const rect = input.getBoundingClientRect();
+    dropdown.style.position = 'absolute';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = (rect.bottom + window.scrollY) + 'px';
+    dropdown.style.width = rect.width + 'px';
+
+    document.body.appendChild(dropdown);
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function closeDropdown(e) {
+        if (!dropdown.contains(e.target) && e.target !== input) {
+            dropdown.remove();
+            document.removeEventListener('click', closeDropdown);
+        }
+    });
+}
+
+// Add this function to initialize autocomplete for an input
+function initializeAutocomplete(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    input.addEventListener('focus', () => {
+        showDropdown(input, recentInputs[inputId]);
+    });
+
+    input.addEventListener('input', () => {
+        addRecentInput(inputId, input.value);
+    });
+}
 
 // Load and visualize the graph
 function loadGraph() {
@@ -49,32 +139,31 @@ function loadGraph() {
 }
 
 // Update loadNotesTable to handle pagination for both filtered and unfiltered data
-function loadNotesTable() {
-    if (currentFilter) {
-        // If we have filtered data, use it with client-side pagination
-        if (filteredData) {
-            displayTablePage(filteredData.nodes, filteredData.rootId);
-        } else {
-            // If filtered data isn't loaded yet, fetch it
-            fetch(`${apiBase}/filter/${currentFilter}?lang=${currentLanguage}`)
-                .then(response => response.json())
-                .then(data => {
-                    filteredData = data;
-                    displayTablePage(data.nodes, data.rootId);
-                });
-        }
+function loadNotesTable(page = 1) {
+    currentPage = page;
+    
+    if (filteredData) {
+        // Handle filtered data pagination
+        totalRows = filteredData.nodes.length; // Set totalRows for filtered data
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        const paginatedRows = filteredData.nodes.slice(startIndex, endIndex);
+        displayTablePage(paginatedRows, null, totalRows);
     } else {
-        // For unfiltered data, use server-side pagination
-        fetch(`${apiBase}/notes-table?page=${currentPage}&limit=${rowsPerPage}&lang=${currentLanguage}`)
+        // Handle unfiltered data pagination
+        fetch(`${apiBase}/notes-table?page=${page}&limit=${rowsPerPage}&lang=${currentLanguage}`)
             .then(response => response.json())
             .then(data => {
-                displayTablePage(data.rows, null, data.total);
-                filteredData = null; // Clear filtered data
+                totalRows = data.total; // Set totalRows for unfiltered data
+                displayTablePage(data.rows, null, totalRows);
+            })
+            .catch(error => {
+                console.error('Error loading notes table:', error);
             });
     }
 }
 
-// Update the displayTablePage function to remove automatic existence checks
+// Restore the original displayTablePage function
 function displayTablePage(rows, rootId, totalRows = null) {
     const tableBody = document.querySelector("#notesTable tbody");
     tableBody.innerHTML = "";
@@ -106,7 +195,7 @@ function displayTablePage(rows, rootId, totalRows = null) {
     updatePagination(totalRows || rows.length);
 }
 
-// Update pagination controls with input field
+// Restore the original updatePagination function
 function updatePagination(totalRows) {
     const totalPages = Math.ceil(totalRows / rowsPerPage);
     const paginationDiv = document.getElementById('pagination-controls');
@@ -150,41 +239,6 @@ function updatePagination(totalRows) {
         </button>
     `;
 
-    // Add styles for better accessibility
-    const styles = document.createElement('style');
-    styles.textContent = `
-        .page-input-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .page-input {
-            width: 60px;
-            padding: 4px;
-            text-align: center;
-        }
-        
-        .page-input:focus {
-            outline: 2px solid #007bff;
-            border-radius: 4px;
-        }
-        
-        /* Hide label visually but keep it for screen readers */
-        .page-input-container label {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
-    `;
-    document.head.appendChild(styles);
-
     // Add event listener for the input field
     const pageInput = controls.querySelector('.page-input');
     pageInput.addEventListener('change', (e) => {
@@ -208,12 +262,19 @@ function updatePagination(totalRows) {
     });
 }
 
-// Add page change handler
+// Restore the original changePage function
 function changePage(newPage) {
+    if (newPage < 1) return;
+    
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+    
+    if (newPage > totalPages) return;
+    
     currentPage = newPage;
-    loadNotesTable();
+    loadNotesTable(newPage);
 }
 
+// Update form submission handlers to store recent inputs
 document.getElementById("noteForm").addEventListener("submit", (e) => {
     e.preventDefault();
   
@@ -221,6 +282,12 @@ document.getElementById("noteForm").addEventListener("submit", (e) => {
     const content = document.getElementById("noteContent").value;
     const content_zh = document.getElementById("noteContentZh").value;
     const parent_id = document.getElementById("noteParentId").value;
+
+    // Store recent inputs
+    addRecentInput('noteId', id);
+    addRecentInput('noteContent', content);
+    addRecentInput('noteContentZh', content_zh);
+    addRecentInput('noteParentId', parent_id);
   
     fetch(`${apiBase}/notes`, {
       method: "POST",
@@ -319,6 +386,7 @@ function updateTable(rows, rootId) {
     });
 }
   
+// Modify the updateGraph function to invert the weight for visualization
 function updateGraph(nodes, links, rootIds) {
     try {
         // Transform the data structure for D3
@@ -331,7 +399,7 @@ function updateGraph(nodes, links, rootIds) {
         const graphLinks = links.map(link => ({
             source: link.from_id || link.source,
             target: link.to_id || link.target,
-            weight: link.weight || 1
+            weight: 0.4 * (30 - (link.weight || 0)) // Invert weight here for visualization
         }));
 
         // Clear existing SVG content
@@ -964,8 +1032,12 @@ function updateFilterUI() {
             <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
             <button onclick="addFilter()">Add Filter</button>
             <button onclick="clearFilters()">Clear All</button>
+            ${selectedFilters.size > 0 ? 
+                `<button onclick="addFilterBookmark()" class="bookmark-button">Save Filter Combination</button>` : 
+                ''}
         </div>
         <div id="activeFilters" class="active-filters"></div>
+        <div id="filterBookmarks" class="filter-bookmarks"></div>
     `;
     
     // Display active filters
@@ -980,6 +1052,9 @@ function updateFilterUI() {
         `;
         activeFiltersDiv.appendChild(filterTag);
     });
+
+    // Update bookmarks list
+    updateBookmarksList();
 }
 
 // Add a new filter
@@ -1122,6 +1197,20 @@ document.head.appendChild(filterStyles);
 document.addEventListener('DOMContentLoaded', () => {
     updateFilterUI();
     showView('table'); // Start with table view
+
+    // Initialize autocomplete for note form inputs
+    initializeAutocomplete('noteId');
+    initializeAutocomplete('noteContent');
+    initializeAutocomplete('noteContentZh');
+    initializeAutocomplete('noteParentId');
+    
+    // Initialize autocomplete for link form inputs
+    initializeAutocomplete('fromId');
+    initializeAutocomplete('toId');
+    initializeAutocomplete('linkDescription');
+    
+    // Initialize autocomplete for filter input
+    initializeAutocomplete('filterInput');
 });
 
 // Update the countNonTreeLinks function to be more explicit
@@ -1291,6 +1380,35 @@ function updateMarkdownIndicator(nodeId, hasMarkdown) {
     }
 }
 
+// Add these styles to your existing styles
+const autocompleteStyles = document.createElement('style');
+autocompleteStyles.textContent = `
+    .autocomplete-dropdown {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+    }
+
+    .autocomplete-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+    }
+
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+
+    .autocomplete-item:hover {
+        background-color: #f5f5f5;
+    }
+`;
+document.head.appendChild(autocompleteStyles);
+
 // Terminal handling
 let terminalHistory = [];
 let historyIndex = -1;
@@ -1446,4 +1564,274 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize terminal
     initializeTerminal();
+});
+
+// Load saved bookmarks from localStorage
+function loadBookmarks() {
+    try {
+        const savedBookmarks = localStorage.getItem('filterBookmarks');
+        if (savedBookmarks) {
+            filterBookmarks = new Map(JSON.parse(savedBookmarks));
+            updateBookmarksList();
+        }
+    } catch (error) {
+        console.error('Error loading bookmarks:', error);
+    }
+}
+
+// Save bookmarks to localStorage
+function saveBookmarks() {
+    try {
+        localStorage.setItem('filterBookmarks', JSON.stringify([...filterBookmarks]));
+    } catch (error) {
+        console.error('Error saving bookmarks:', error);
+    }
+}
+
+// Update the updateBookmarksList function
+function updateBookmarksList() {
+    const bookmarksContainer = document.getElementById('filterBookmarks');
+    if (!bookmarksContainer) return;
+
+    bookmarksContainer.innerHTML = '';
+    
+    if (filterBookmarks.size === 0) {
+        bookmarksContainer.innerHTML = '<p class="no-bookmarks">No saved filter combinations</p>';
+        return;
+    }
+
+    filterBookmarks.forEach((filters, name) => {
+        const bookmarkDiv = document.createElement('div');
+        bookmarkDiv.className = 'filter-bookmark';
+        
+        // Create the bookmark info div
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'bookmark-info';
+        infoDiv.innerHTML = `
+            <span class="bookmark-name">${name}</span>
+            <span class="bookmark-filters">${filters.join(', ')}</span>
+        `;
+        
+        // Create the actions div with buttons
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'bookmark-actions';
+        
+        // Create Apply button
+        const applyButton = document.createElement('button');
+        applyButton.className = 'apply-bookmark';
+        applyButton.textContent = 'Apply';
+        applyButton.addEventListener('click', () => applyBookmark(name));
+        
+        // Create Delete button
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'delete-bookmark';
+        deleteButton.textContent = 'Delete';
+        deleteButton.addEventListener('click', () => deleteBookmark(name));
+        
+        // Append buttons to actions div
+        actionsDiv.appendChild(applyButton);
+        actionsDiv.appendChild(deleteButton);
+        
+        // Append both divs to the bookmark div
+        bookmarkDiv.appendChild(infoDiv);
+        bookmarkDiv.appendChild(actionsDiv);
+        
+        // Append the bookmark div to the container
+        bookmarksContainer.appendChild(bookmarkDiv);
+    });
+}
+
+// Update the applyBookmark function
+function applyBookmark(name) {
+    const filters = filterBookmarks.get(name);
+    if (!filters) return;
+
+    // Clear existing filters
+    selectedFilters.clear();
+    
+    // Add all filters from the bookmark
+    filters.forEach(filter => selectedFilters.add(filter));
+    
+    // Update UI and apply filters
+    updateFilterUI();
+    applyFilters();
+}
+
+// Update the deleteBookmark function
+function deleteBookmark(name) {
+    if (confirm(`Delete bookmark "${name}"?`)) {
+        filterBookmarks.delete(name);
+        saveBookmarks();
+        updateBookmarksList();
+    }
+}
+
+// Add these styles for the modal
+const modalStyles = document.createElement('style');
+modalStyles.textContent = `
+    .bookmark-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .bookmark-modal-content {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        min-width: 300px;
+    }
+
+    .bookmark-modal-content h3 {
+        margin: 0 0 15px 0;
+        color: #333;
+    }
+
+    .bookmark-name-input {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .bookmark-name-input:focus {
+        outline: none;
+        border-color: #2196F3;
+        box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+    }
+
+    .bookmark-name-input.error {
+        border-color: #f44336;
+        animation: shake 0.5s;
+    }
+
+    .bookmark-modal-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .bookmark-modal-buttons button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .save-button {
+        background: #4CAF50;
+        color: white;
+    }
+
+    .save-button:hover {
+        background: #45a049;
+    }
+
+    .cancel-button {
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+    }
+
+    .cancel-button:hover {
+        background: #e5e5e5;
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+`;
+document.head.appendChild(modalStyles);
+
+// Add these styles to your existing styles
+const bookmarkStyles = document.createElement('style');
+bookmarkStyles.textContent = `
+    .filter-bookmarks {
+        margin-top: 20px;
+        border-top: 1px solid #eee;
+        padding-top: 10px;
+    }
+
+    .filter-bookmark {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        margin: 4px 0;
+        background: #f5f5f5;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+
+    .bookmark-info {
+        flex: 1;
+    }
+
+    .bookmark-name {
+        font-weight: bold;
+        margin-right: 10px;
+    }
+
+    .bookmark-filters {
+        color: #666;
+        font-size: 0.9em;
+    }
+
+    .bookmark-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .apply-bookmark {
+        background: #4CAF50;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+
+    .delete-bookmark {
+        background: #f44336;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+
+    .bookmark-button {
+        background: #2196F3;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .no-bookmarks {
+        color: #666;
+        font-style: italic;
+        text-align: center;
+        padding: 10px;
+    }
+`;
+document.head.appendChild(bookmarkStyles);
+
+// Initialize bookmarks when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+    loadBookmarks();
+    // ... existing DOMContentLoaded code ...
 });
