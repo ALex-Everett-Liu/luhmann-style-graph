@@ -25,13 +25,24 @@ module.exports = function createServer(electronApp) {
     // Update static files path
     const publicPath = path.join(isDev ? __dirname : process.resourcesPath, "public");
 
-    // Define markdown files directory
-    const markdownDir = isDev ? 
-        path.join(__dirname, 'markdown_files') : 
-        path.join(electronApp.getPath('userData'), 'markdown_files');
+    // Update markdown directory handling
+    function getMarkdownDir() {
+        return isDev ? 
+            path.join(__dirname, 'markdown_files') : 
+            (electronApp.getStore?.('markdownDir') || path.join(electronApp.getPath('userData'), 'markdown_files'));
+    }
+
+    // Initialize markdown directory
+    let markdownDir = getMarkdownDir();
 
     // Ensure markdown directory exists
-    fs.mkdir(markdownDir, { recursive: true }).catch(console.error);
+    fs.mkdir(markdownDir, { recursive: true })
+        .then(() => {
+            logger.info('Markdown directory initialized', { path: markdownDir });
+        })
+        .catch(error => {
+            errorLogger.error('Failed to create markdown directory', { error });
+        });
 
     // Middleware
     app.use(bodyParser.json());
@@ -386,6 +397,54 @@ module.exports = function createServer(electronApp) {
         } catch (error) {
             errorLogger.error('Markdown read failed', { error });
             res.status(500).json({ error: 'Failed to read markdown file' });
+        }
+    });
+
+    // Add endpoint to update markdown directory
+    app.post('/api/settings/markdown-dir', async (req, res) => {
+        try {
+            const { directory } = req.body;
+            
+            // Validate directory exists
+            await fs.access(directory);
+            
+            // Store the new directory path if storage is available
+            if (electronApp.setStore) {
+                electronApp.setStore('markdownDir', directory);
+            }
+            
+            // Update current markdownDir
+            markdownDir = directory;
+            
+            // Ensure the directory exists
+            await fs.mkdir(directory, { recursive: true });
+            
+            // Move existing files if any
+            const oldDir = path.join(electronApp.getPath('userData'), 'markdown_files');
+            if (oldDir !== directory) {
+                try {
+                    const files = await fs.readdir(oldDir);
+                    for (const file of files) {
+                        const oldPath = path.join(oldDir, file);
+                        const newPath = path.join(directory, file);
+                        await fs.copyFile(oldPath, newPath);
+                    }
+                    logger.info('Markdown files moved to new directory', { 
+                        from: oldDir, 
+                        to: directory 
+                    });
+                } catch (err) {
+                    logger.warn('No existing files to move', { error: err });
+                }
+            }
+
+            res.json({ success: true, directory });
+        } catch (error) {
+            errorLogger.error('Failed to update markdown directory', { error });
+            res.status(500).json({ 
+                error: 'Failed to update markdown directory',
+                details: error.message 
+            });
         }
     });
 

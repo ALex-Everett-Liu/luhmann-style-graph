@@ -8,6 +8,7 @@ let selectedFilters = new Set();
 let filterBookmarks = new Map();
 let totalRows = 0;
 
+// Using a Set allows for the automatic handling of duplicate entries, meaning that if a user enters the same value multiple times, it will only be stored once.
 const recentInputs = {
     noteId: new Set(),
     noteContent: new Set(),
@@ -19,13 +20,14 @@ const recentInputs = {
     filterInput: new Set()
 };
 
-const MAX_RECENT_ITEMS = 5;
+const MAX_RECENT_ITEMS = 5; // defines the maximum number of recent entries to keep for each input field.
 
-// Add this helper function at the top of your script.js
+// Add this helper function at the top of your script.js, checks if the application is running in an Electron environment.
 function isElectron() {
     return window.electron !== undefined;
 }
 
+// handles the submission of a form for creating a link between two nodes
 document.getElementById("linkForm").addEventListener("submit", (e) => {
     e.preventDefault();
   
@@ -50,7 +52,7 @@ document.getElementById("linkForm").addEventListener("submit", (e) => {
     });
 });
 
-// Add this function to handle storing recent inputs
+// handle storing recent inputs
 function addRecentInput(inputId, value) {
     if (!value.trim()) return;
     
@@ -1835,3 +1837,30 @@ document.addEventListener('DOMContentLoaded', () => {
     loadBookmarks();
     // ... existing DOMContentLoaded code ...
 });
+
+// Add this function to handle directory selection
+async function selectMarkdownDirectory() {
+    try {
+        // Use Electron's dialog to select directory
+        const result = await window.electron.showDirectoryPicker();
+        
+        if (!result.canceled) {
+            const directory = result.filePaths[0];
+            
+            // Update the backend
+            const response = await fetch(`${apiBase}/settings/markdown-dir`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ directory })
+            });
+            
+            if (!response.ok) throw new Error('Failed to update markdown directory');
+            
+            const data = await response.json();
+            alert('Markdown directory updated successfully!');
+        }
+    } catch (error) {
+        console.error('Error updating markdown directory:', error);
+        alert('Failed to update markdown directory: ' + error.message);
+    }
+}

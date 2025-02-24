@@ -17,7 +17,8 @@ contextBridge.exposeInMainWorld('electron', {
             console.error('Error opening file:', error);
             throw error;
         }
-    }
+    },
+    showDirectoryPicker: () => ipcRenderer.invoke('show-directory-picker')
 });
 
 // Log that the API has been exposed

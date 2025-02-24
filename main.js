@@ -2,6 +2,16 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { logger, categoryLogger } = require('./utils/logger');
 const appLogger = categoryLogger('app');
+import('electron-store').then(({ default: Store }) => {
+    const store = new Store();
+    
+    // Add these methods to global app object
+    app.getStore = (key) => store.get(key);
+    app.setStore = (key, value) => store.set(key, value);
+}).catch(error => {
+    appLogger.error('Failed to initialize electron-store', { error });
+});
+const { dialog } = require('electron');
 
 // Keep a global reference of the window object
 let mainWindow;
@@ -88,4 +98,10 @@ ipcMain.on('log', (event, level, data) => {
         default:
             appLogger.info(data.message, data);
     }
+});
+
+ipcMain.handle('show-directory-picker', async () => {
+    return dialog.showOpenDialog({
+        properties: ['openDirectory']
+    });
 }); 
