@@ -1864,3 +1864,44 @@ async function selectMarkdownDirectory() {
         alert('Failed to update markdown directory: ' + error.message);
     }
 }
+
+// Add this function to handle markdown files transfer
+async function transferMarkdownFiles() {
+    try {
+        // Use Electron's dialog to select directory
+        const result = await window.electron.showDirectoryPicker();
+        
+        if (!result.canceled) {
+            const directory = result.filePaths[0];
+            
+            // Show confirmation dialog
+            if (!confirm(`Are you sure you want to transfer all markdown files to:\n${directory}`)) {
+                return;
+            }
+
+            // Transfer the files
+            const response = await fetch(`${apiBase}/settings/transfer-markdown`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ directory })
+            });
+            
+            if (!response.ok) throw new Error('Failed to transfer files');
+            
+            const data = await response.json();
+            
+            // Show results
+            let message = `Successfully transferred ${data.results.success.length} files to new location.`;
+            if (data.results.failed.length > 0) {
+                message += `\nFailed to transfer ${data.results.failed.length} files:`;
+                data.results.failed.forEach(fail => {
+                    message += `\n- ${fail.file}: ${fail.error}`;
+                });
+            }
+            alert(message);
+        }
+    } catch (error) {
+        console.error('Error transferring markdown files:', error);
+        alert('Failed to transfer markdown files: ' + error.message);
+    }
+}

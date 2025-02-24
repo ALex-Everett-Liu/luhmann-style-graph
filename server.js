@@ -448,6 +448,57 @@ module.exports = function createServer(electronApp) {
         }
     });
 
+    // Add endpoint to transfer existing markdown files
+    app.post('/api/settings/transfer-markdown', async (req, res) => {
+        try {
+            const { directory } = req.body;
+            const defaultDir = path.join(electronApp.getPath('userData'), 'markdown_files');
+            
+            // Validate new directory exists
+            await fs.access(directory);
+            
+            // Ensure the new directory exists
+            await fs.mkdir(directory, { recursive: true });
+            
+            // Get list of all markdown files
+            const files = await fs.readdir(defaultDir);
+            const results = {
+                success: [],
+                failed: []
+            };
+
+            // Copy each file
+            for (const file of files) {
+                try {
+                    const oldPath = path.join(defaultDir, file);
+                    const newPath = path.join(directory, file);
+                    await fs.copyFile(oldPath, newPath);
+                    results.success.push(file);
+                } catch (err) {
+                    results.failed.push({ file, error: err.message });
+                }
+            }
+
+            // Update the stored directory path if all files were copied successfully
+            if (results.failed.length === 0 && electronApp.setStore) {
+                electronApp.setStore('markdownDir', directory);
+                markdownDir = directory; // Update current markdownDir
+            }
+
+            res.json({
+                success: true,
+                results,
+                newDirectory: directory
+            });
+        } catch (error) {
+            errorLogger.error('Failed to transfer markdown files', { error });
+            res.status(500).json({ 
+                error: 'Failed to transfer markdown files',
+                details: error.message 
+            });
+        }
+    });
+
     // 1. Request Logging & ID Generation Middleware (Early in the middleware chain)
     app.use((req, res, next) => {
         req.requestId = generateRequestId();
