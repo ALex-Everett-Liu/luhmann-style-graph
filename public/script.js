@@ -1668,7 +1668,79 @@ function deleteBookmark(name) {
     }
 }
 
-// Add these styles for the modal
+// Add back the addFilterBookmark function
+function addFilterBookmark() {
+    // Create modal container
+    const modal = document.createElement('div');
+    modal.className = 'bookmark-modal';
+    
+    // Create modal content
+    modal.innerHTML = `
+        <div class="bookmark-modal-content">
+            <h3>Save Filter Combination</h3>
+            <input 
+                type="text" 
+                id="bookmarkName" 
+                placeholder="Enter bookmark name"
+                class="bookmark-name-input"
+            >
+            <div class="bookmark-modal-buttons">
+                <button id="saveBookmark" class="save-button">Save</button>
+                <button id="cancelBookmark" class="cancel-button">Cancel</button>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to document
+    document.body.appendChild(modal);
+    
+    // Focus the input
+    const input = modal.querySelector('#bookmarkName');
+    input.focus();
+
+    // Handle save
+    modal.querySelector('#saveBookmark').addEventListener('click', () => {
+        const name = input.value.trim();
+        if (name) {
+            filterBookmarks.set(name, Array.from(selectedFilters));
+            saveBookmarks();
+            updateBookmarksList();
+            modal.remove();
+        } else {
+            input.classList.add('error');
+            setTimeout(() => input.classList.remove('error'), 500);
+        }
+    });
+
+    // Handle cancel
+    modal.querySelector('#cancelBookmark').addEventListener('click', () => {
+        modal.remove();
+    });
+
+    // Handle Enter key
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            modal.querySelector('#saveBookmark').click();
+        }
+    });
+
+    // Handle Escape key
+    document.addEventListener('keydown', function closeOnEscape(e) {
+        if (e.key === 'Escape') {
+            modal.remove();
+            document.removeEventListener('keydown', closeOnEscape);
+        }
+    });
+
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+// Add back the modal styles
 const modalStyles = document.createElement('style');
 modalStyles.textContent = `
     .bookmark-modal {

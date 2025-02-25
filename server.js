@@ -25,15 +25,15 @@ module.exports = function createServer(electronApp) {
     // Update static files path
     const publicPath = path.join(isDev ? __dirname : process.resourcesPath, "public");
 
-    // Update markdown directory handling
-    function getMarkdownDir() {
+    // Add a function to get current markdown directory
+    function getCurrentMarkdownDir() {
         return isDev ? 
             path.join(__dirname, 'markdown_files') : 
             (electronApp.getStore?.('markdownDir') || path.join(electronApp.getPath('userData'), 'markdown_files'));
     }
 
     // Initialize markdown directory
-    let markdownDir = getMarkdownDir();
+    let markdownDir = getCurrentMarkdownDir();
 
     // Ensure markdown directory exists
     fs.mkdir(markdownDir, { recursive: true })
@@ -356,26 +356,24 @@ module.exports = function createServer(electronApp) {
         try {
             const { nodeId } = req.params;
             const { content } = req.body;
-            const filePath = path.join(markdownDir, `${nodeId}.md`);
             
-            if (content !== undefined) {
-                // Save new content
-                await fs.writeFile(filePath, content, 'utf8');
-                res.json({ success: true });
-            } else {
-                // Read existing content or create default
-                try {
-                    const existingContent = await fs.readFile(filePath, 'utf8');
-                    res.json({ content: existingContent });
-                } catch {
-                    const defaultContent = `# Node ${nodeId}\n\nAdd your notes here...`;
-                    await fs.writeFile(filePath, defaultContent, 'utf8');
-                    res.json({ content: defaultContent });
-                }
-            }
+            // Get current markdown directory
+            const currentDir = getCurrentMarkdownDir();
+            
+            // Ensure directory exists
+            await fs.mkdir(currentDir, { recursive: true });
+            
+            // Write file to current directory
+            const filePath = path.join(currentDir, `${nodeId}.md`);
+            await fs.writeFile(filePath, content, 'utf8');
+            
+            res.json({ success: true });
         } catch (error) {
-            errorLogger.error('Markdown file operation failed', { error });
-            res.status(500).json({ error: 'Failed to handle markdown file' });
+            errorLogger.error('Failed to save markdown', { error });
+            res.status(500).json({ 
+                error: 'Failed to save markdown',
+                details: error.message 
+            });
         }
     });
 
@@ -383,20 +381,24 @@ module.exports = function createServer(electronApp) {
     app.get('/api/markdown/:nodeId', async (req, res) => {
         try {
             const { nodeId } = req.params;
-            const filePath = path.join(markdownDir, `${nodeId}.md`);
             
-            try {
-                const content = await fs.readFile(filePath, 'utf8');
-                res.json({ content });
-            } catch {
-                // If file doesn't exist, return empty content
-                const defaultContent = `# Node ${nodeId}\n\nAdd your notes here...`;
-                await fs.writeFile(filePath, defaultContent, 'utf8');
-                res.json({ content: defaultContent });
-            }
+            // Get current markdown directory
+            const currentDir = getCurrentMarkdownDir();
+            
+            const filePath = path.join(currentDir, `${nodeId}.md`);
+            const content = await fs.readFile(filePath, 'utf8');
+            
+            res.json({ content });
         } catch (error) {
-            errorLogger.error('Markdown read failed', { error });
-            res.status(500).json({ error: 'Failed to read markdown file' });
+            if (error.code === 'ENOENT') {
+                res.json({ content: '' }); // Return empty content for new files
+            } else {
+                errorLogger.error('Failed to read markdown', { error });
+                res.status(500).json({ 
+                    error: 'Failed to read markdown',
+                    details: error.message 
+                });
+            }
         }
     });
 
@@ -448,7 +450,7 @@ module.exports = function createServer(electronApp) {
         }
     });
 
-    // Add endpoint to transfer existing markdown files
+    // Update the transfer endpoint to also set as default directory
     app.post('/api/settings/transfer-markdown', async (req, res) => {
         try {
             const { directory } = req.body;
@@ -479,8 +481,8 @@ module.exports = function createServer(electronApp) {
                 }
             }
 
-            // Update the stored directory path if all files were copied successfully
-            if (results.failed.length === 0 && electronApp.setStore) {
+            // Set as new default directory
+            if (electronApp.setStore) {
                 electronApp.setStore('markdownDir', directory);
                 markdownDir = directory; // Update current markdownDir
             }
