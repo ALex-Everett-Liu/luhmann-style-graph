@@ -1,3 +1,117 @@
+/* Add these modern UI base styles at the top of your existing CSS */
+:root {
+  --primary-color: #2196f3;
+  --secondary-color: #4caf50;
+  --accent-color: #ff5722;
+  --text-color: #333;
+  --light-gray: #f5f5f5;
+  --border-color: #ddd;
+  --error-color: #f44336;
+  --success-color: #4CAF50;
+  --radius: 8px;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+  color: var(--text-color);
+  margin: 0;
+  padding: 20px;
+  background-color: #f9f9f9;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.app-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin: 0;
+}
+
+/* Modern button styles */
+button, 
+input[type="submit"] {
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: none;
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+button:hover {
+  background-color: #1976d2;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+button.secondary {
+  background-color: var(--light-gray);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+button.secondary:hover {
+  background-color: #e0e0e0;
+}
+
+button.accent {
+  background-color: var(--accent-color);
+}
+
+button.accent:hover {
+  background-color: #e64a19;
+}
+
+/* Modern form styles */
+input[type="text"],
+input[type="number"] {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  font-size: 14px;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+  border-color: var(--primary-color);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+/* Card component for forms and content */
+.card {
+  background-color: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
 .view {
     display: none;
     width: 100%;
