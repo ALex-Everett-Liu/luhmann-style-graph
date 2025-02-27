@@ -1047,10 +1047,12 @@ function updateFilterUI() {
             <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
             <button onclick="addFilter()">Add Filter</button>
             <button onclick="clearFilters()">Clear All</button>
-            ${selectedFilters.size > 0 ? 
-                `<button onclick="addFilterBookmark()" class="bookmark-button">Save Filter Combination</button>` : 
-                ''}
         </div>
+        ${selectedFilters.size > 0 ? 
+            `<div class="bookmark-button-container">
+                <button onclick="addFilterBookmark()" class="bookmark-button">Save Filter Combination</button>
+            </div>` : 
+            ''}
         <div id="activeFilters" class="active-filters"></div>
         <div id="filterBookmarks" class="filter-bookmarks"></div>
     `;
@@ -1991,21 +1993,48 @@ async function transferMarkdownFiles() {
     }
 }
 
-// Add this function to reorganize the main interface
+// Update the initializeInterface function to preserve language toggle functionality
 function initializeInterface() {
+  // First check if we've already initialized to prevent duplication
+  if (document.querySelector('.app-container')) return;
+  
   // Create main app container
   const appContainer = document.createElement('div');
   appContainer.className = 'app-container';
   
-  // Create header
+  // Create header - but preserve any existing language toggle buttons
+  const existingToggle = document.getElementById('langToggle');
+  const toggleFunction = existingToggle ? existingToggle.onclick : null;
+  
   const header = document.createElement('header');
   header.className = 'app-header';
-  header.innerHTML = `
-    <h1 class="app-title">Zettelkasten System</h1>
-    <div class="language-toggle">
-      <button id="langToggle" onclick="toggleLanguage()">切换到中文</button>
-    </div>
-  `;
+  
+  // Create title
+  const titleElement = document.createElement('h1');
+  titleElement.className = 'app-title';
+  titleElement.textContent = 'Zettelkasten System';
+  
+  // Create language toggle container
+  const langToggleContainer = document.createElement('div');
+  langToggleContainer.className = 'language-toggle';
+  
+  // Create toggle button while preserving original onclick function
+  const toggleButton = document.createElement('button');
+  toggleButton.id = 'langToggle';
+  toggleButton.textContent = '切换到中文'; // Default text
+  
+  // If we found an existing toggle, preserve its text and function
+  if (existingToggle) {
+    toggleButton.textContent = existingToggle.textContent;
+    if (toggleFunction) {
+      toggleButton.onclick = toggleFunction;
+    }
+  }
+  
+  // Assemble header
+  langToggleContainer.appendChild(toggleButton);
+  header.appendChild(titleElement);
+  header.appendChild(langToggleContainer);
   
   // Create main content area
   const mainContent = document.createElement('main');
@@ -2015,11 +2044,12 @@ function initializeInterface() {
   const sidebar = document.createElement('aside');
   sidebar.className = 'sidebar';
   
-  // Move existing forms to sidebar
+  // Find existing forms
   const noteForm = document.getElementById('noteForm');
   const linkForm = document.getElementById('linkForm');
   const filterSection = document.getElementById('filterSection');
   
+  // Handle existing elements without removing them
   if (noteForm) {
     const noteCard = wrapInCard(noteForm, 'Add Note');
     sidebar.appendChild(noteCard);
@@ -2054,7 +2084,13 @@ function initializeInterface() {
   mainContent.appendChild(sidebar);
   mainContent.appendChild(viewContainer);
   
-  // Insert everything into body
+  // Remove only specific outdated elements, rather than clearing everything
+  // This preserves event handlers on elements we're not explicitly handling
+  document.querySelectorAll('h1').forEach(h => {
+    if (h !== titleElement) h.remove();
+  });
+  
+  // Insert our new structure
   document.body.prepend(appContainer);
   appContainer.appendChild(header);
   appContainer.appendChild(mainContent);
@@ -2092,23 +2128,100 @@ function initializeInterface() {
         grid-column: 1;
       }
     }
+    
+    /* Language toggle */
+    .language-toggle button {
+      background-color: var(--secondary-color);
+    }
   `;
   document.head.appendChild(style);
 }
 
 // Helper function to wrap element in a card
 function wrapInCard(element, title) {
+  // Check if element is already wrapped in a card
+  if (element.parentElement && element.parentElement.classList.contains('card')) {
+    return element.parentElement;
+  }
+  
+  // Create a new card
   const card = document.createElement('div');
   card.className = 'card';
   
+  // Create card title
   const cardTitle = document.createElement('h2');
   cardTitle.className = 'card-title';
   cardTitle.textContent = title;
   
+  // Clone element to preserve all event handlers
+  const elementClone = element.cloneNode(true);
+  
+  // Find all elements with event handlers in the original
+  const elementsWithHandlers = getAllElements(element);
+  elementsWithHandlers.forEach(el => {
+    // Find corresponding element in the clone
+    const selector = getUniqueSelector(el);
+    if (selector) {
+      const cloneEl = elementClone.querySelector(selector);
+      if (cloneEl) {
+        // Copy all event handlers to the clone
+        copyEventListeners(el, cloneEl);
+      }
+    }
+  });
+  
+  // Remove the original element from DOM
+  if (element.parentElement) {
+    element.parentElement.removeChild(element);
+  }
+  
+  // Add title and cloned element to card
   card.appendChild(cardTitle);
-  card.appendChild(element);
+  card.appendChild(elementClone);
   
   return card;
+}
+
+// Helper function to get all elements inside a container
+function getAllElements(container) {
+  return [container, ...container.querySelectorAll('*')];
+}
+
+// Helper function to get a unique selector for an element
+function getUniqueSelector(el) {
+  if (el.id) return `#${el.id}`;
+  
+  // For elements without ID, try to create a path
+  let path = '';
+  while (el && el.tagName) {
+    let selector = el.tagName.toLowerCase();
+    if (el.className) {
+      const classes = el.className.split(' ').filter(c => c).join('.');
+      if (classes) {
+        selector += `.${classes}`;
+      }
+    }
+    path = path ? `${selector} > ${path}` : selector;
+    el = el.parentElement;
+  }
+  
+  return path;
+}
+
+// Helper function to copy event listeners from one element to another
+function copyEventListeners(source, target) {
+  // For declarative event handlers (onclick, etc.)
+  const eventAttributes = ['onclick', 'onchange', 'onsubmit', 'onkeyup', 'onkeydown', 'oninput'];
+  eventAttributes.forEach(attr => {
+    if (source[attr]) {
+      target[attr] = source[attr];
+    }
+  });
+  
+  // Copy the source element's ID to ensure any JS references work
+  if (source.id && !target.id) {
+    target.id = source.id;
+  }
 }
 
 // Initialize the interface after DOM loaded

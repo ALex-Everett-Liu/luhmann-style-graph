@@ -404,4 +404,22 @@ form button:hover {
 
 .settings-button:hover {
     background-color: #45a049;
-} 
+}
+
+.bookmark-button-container {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.bookmark-button {
+    background: #2196F3;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.bookmark-button:hover {
+    background: #1976d2;
+}
