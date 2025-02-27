@@ -1050,12 +1050,24 @@ function updateFilterUI() {
         </div>
         ${selectedFilters.size > 0 ? 
             `<div class="bookmark-button-container">
-                <button onclick="addFilterBookmark()" class="bookmark-button">Save Filter Combination</button>
+                <button id="saveFilterBtn" class="bookmark-button">Save Filter Combination</button>
             </div>` : 
             ''}
         <div id="activeFilters" class="active-filters"></div>
         <div id="filterBookmarks" class="filter-bookmarks"></div>
     `;
+    
+    // Re-attach event handler for the Save Filter button if it exists
+    const saveFilterBtn = document.getElementById('saveFilterBtn');
+    if (saveFilterBtn) {
+        saveFilterBtn.addEventListener('click', addFilterBookmark);
+    }
+    
+    // Re-attach event handler for the language toggle button to ensure it works after DOM changes
+    const langToggle = document.getElementById('langToggle');
+    if (langToggle) {
+        langToggle.onclick = toggleLanguage;
+    }
     
     // Display active filters
     const activeFiltersDiv = document.getElementById('activeFilters');
@@ -1159,6 +1171,12 @@ function applyFilters() {
                     }));
                     drawMindMap(hierarchyData);
                     break;
+            }
+            
+            // Ensure language toggle works after updating the UI
+            const langToggle = document.getElementById('langToggle');
+            if (langToggle) {
+                langToggle.onclick = toggleLanguage;
             }
         })
         .catch(error => {
