@@ -1978,7 +1978,112 @@ async function transferMarkdownFiles() {
     }
 }
 
-// Apply modern UI enhancements without disrupting functionality
+// Fix the form submission issue
+function fixFormSubmissions() {
+    // Fix the note form submission
+    const noteForm = document.getElementById('noteForm');
+    if (noteForm) {
+        // Remove any existing event listeners by cloning and replacing the form
+        const newNoteForm = noteForm.cloneNode(true);
+        noteForm.parentNode.replaceChild(newNoteForm, noteForm);
+        
+        // Add the event listener to the new form
+        newNoteForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const id = document.getElementById('noteId').value;
+            const content = document.getElementById('noteContent').value;
+            const content_zh = document.getElementById('noteContentZh').value;
+            const parent_id = document.getElementById('noteParentId').value;
+            
+            try {
+                const response = await fetch(`${apiBase}/notes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id,
+                        content,
+                        content_zh,
+                        parent_id
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to add note');
+                }
+                
+                // Clear form fields
+                document.getElementById('noteId').value = '';
+                document.getElementById('noteContent').value = '';
+                document.getElementById('noteContentZh').value = '';
+                document.getElementById('noteParentId').value = '';
+                
+                // Refresh the graph/table
+                loadGraph();
+                
+                console.log('Note added successfully!');
+            } catch (error) {
+                console.error('Error adding note:', error);
+                alert('Failed to add note: ' + error.message);
+            }
+        });
+    }
+    
+    // Fix the link form submission
+    const linkForm = document.getElementById('linkForm');
+    if (linkForm) {
+        // Remove any existing event listeners by cloning and replacing the form
+        const newLinkForm = linkForm.cloneNode(true);
+        linkForm.parentNode.replaceChild(newLinkForm, linkForm);
+        
+        // Add the event listener to the new form
+        newLinkForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fromId = document.getElementById('fromId').value;
+            const toId = document.getElementById('toId').value;
+            const description = document.getElementById('linkDescription').value;
+            const weight = document.getElementById('linkWeight').value;
+            
+            try {
+                const response = await fetch(`${apiBase}/links`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        from_id: fromId,
+                        to_id: toId,
+                        description,
+                        weight
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to add link');
+                }
+                
+                // Clear form fields
+                document.getElementById('fromId').value = '';
+                document.getElementById('toId').value = '';
+                document.getElementById('linkDescription').value = '';
+                document.getElementById('linkWeight').value = '1.0';
+                
+                // Refresh the graph/table
+                loadGraph();
+                
+                console.log('Link added successfully!');
+            } catch (error) {
+                console.error('Error adding link:', error);
+                alert('Failed to add link: ' + error.message);
+            }
+        });
+    }
+}
+
+// Update the applyModernUI function to call fixFormSubmissions
 function applyModernUI() {
     // Add modern UI base styles
     const modernStyles = document.createElement('style');
@@ -2338,6 +2443,9 @@ function applyModernUI() {
             if (window.updateFilterUI) {
                 window.updateFilterUI();
             }
+            
+            // Fix form submissions
+            fixFormSubmissions();
         });
     } else {
         // Page already loaded
@@ -2354,6 +2462,9 @@ function applyModernUI() {
         if (window.updateFilterUI) {
             window.updateFilterUI();
         }
+        
+        // Fix form submissions
+        fixFormSubmissions();
     }
 }
 
