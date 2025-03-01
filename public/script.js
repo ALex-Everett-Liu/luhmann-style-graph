@@ -20,7 +20,7 @@ const recentInputs = {
     filterInput: new Set()
 };
 
-const MAX_RECENT_ITEMS = 10; // defines the maximum number of recent entries to keep for each input field.
+const MAX_RECENT_ITEMS = 5; // defines the maximum number of recent entries to keep for each input field.
 
 // Add this helper function at the top of your script.js, checks if the application is running in an Electron environment.
 function isElectron() {
@@ -303,19 +303,54 @@ document.getElementById("noteForm").addEventListener("submit", (e) => {
     });
 });
 
-function addFilter() {
+function applyFilter() {
     const nodeId = document.getElementById('filterInput').value.trim();
     if (!nodeId) return;
 
-    selectedFilters.add(nodeId);
-    applyFilters();
+    currentFilter = nodeId;
+    currentPage = 1; // Reset to first page when filtering
+    
+    fetch(`${apiBase}/filter/${nodeId}?lang=${currentLanguage}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Filter failed');
+            return response.json();
+        })
+        .then(data => {
+            if (!data.nodes || data.nodes.length === 0) {
+                alert('No nodes found for this filter');
+                return;
+            }
+
+            filteredData = data; // Store filtered data
+            const activeView = document.querySelector('.view[style*="display: block"]').id;
+            
+            switch (activeView) {
+                case 'notesTable':
+                    displayTablePage(data.nodes, data.rootId);
+                    break;
+                case 'graph':
+                    updateGraph(data.nodes, data.links || [], data.rootId);
+                    break;
+                case 'mindmap-container':
+                    const hierarchyData = data.nodes.map(node => ({
+                        id: node.child_id,
+                        content: node.child_content,
+                        parent_id: node.parent_id
+                    }));
+                    drawMindMap(hierarchyData);
+                    break;
+            }
+        })
+        .catch(error => {
+            console.error('Filter error:', error);
+            alert('Error applying filter: ' + error.message);
+        });
 }
 
-function clearFilters() {
-    selectedFilters.clear();
+function clearFilter() {
     currentFilter = null;
     filteredData = null;
-    currentPage = 1;
+    currentPage = 1; // Reset to first page when clearing filter
     document.getElementById('filterInput').value = '';
     
     const activeView = document.querySelector('.view[style*="display: block"]').id;
@@ -333,52 +368,26 @@ function clearFilters() {
     }
 }
 
-function applyFilters() {
-    if (selectedFilters.size === 0) return;
-    
-    const nodeIds = Array.from(selectedFilters).join(',');
-    currentFilter = nodeIds;
-    currentPage = 1;
-    
-    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}&lang=${currentLanguage}`)
-        .then(response => {
-            if (!response.ok) throw new Error('Filter failed');
-            return response.json();
-        })
-        .then(data => {
-            if (!data.nodes || data.nodes.length === 0) {
-                alert('No nodes found for these filters');
-                return;
-            }
-
-            // Store filtered data globally
-            filteredData = data;
-            
-            // Update current view based on filtered data
-            const activeView = document.querySelector('.view[style*="display: block"]')?.id;
-            switch (activeView) {
-                case 'notesTable':
-                    displayTablePage(data.nodes, data.rootIds);
-                    break;
-                case 'graph':
-                    updateGraph(data.nodes, data.links || [], data.rootIds);
-                    break;
-                case 'mindmap-container':
-                    const hierarchyData = data.nodes.map(node => ({
-                        id: node.child_id,
-                        content: node.child_content,
-                        parent_id: node.parent_id
-                    }));
-                    drawMindMap(hierarchyData);
-                    break;
-            }
-        })
-        .catch(error => {
-            console.error('Filter error:', error);
-            alert('Error applying filters: ' + error.message);
-        });
+function updateTable(rows, rootId) {
+    const tableBody = document.querySelector("#notesTable tbody");
+    tableBody.innerHTML = "";
+  
+    rows.forEach(row => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${row.child_id}</td>
+        <td>${row.child_content}</td>
+        <td>${row.parent_id || "-"}</td>
+        <td>${row.parent_content || "-"}</td>
+      `;
+      // Highlight root node
+      if (row.child_id === rootId) {
+        tr.style.backgroundColor = '#ffeeba';
+      }
+      tableBody.appendChild(tr);
+    });
 }
-
+  
 // Modify the updateGraph function to invert the weight for visualization
 function updateGraph(nodes, links, rootIds) {
     try {
@@ -516,15 +525,6 @@ function showView(viewName) {
     // Hide all views
     document.querySelectorAll('.view').forEach(view => {
         view.style.display = 'none';
-        view.classList.remove('active');
-    });
-
-    // Update all buttons to show active state
-    document.querySelectorAll('.view-controls button').forEach(button => {
-        button.classList.remove('active-view');
-        if (button.getAttribute('data-view') === viewName) {
-            button.classList.add('active-view');
-        }
     });
 
     // Show selected view
@@ -549,11 +549,7 @@ function showView(viewName) {
 
     if (targetView) {
         targetView.style.display = 'block';
-        targetView.classList.add('active');
     }
-    
-    // Save the current view preference
-    localStorage.setItem('lastActiveView', viewName);
 }
 
 function loadMindMap() {
@@ -1033,135 +1029,48 @@ showView('table'); // Start with table view
 // Update the filter section HTML in your index.html
 function updateFilterUI() {
     const filterSection = document.getElementById('filterSection');
-    if (!filterSection) return;
-    
     filterSection.innerHTML = `
         <div class="filter-input-group">
             <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
             <button onclick="addFilter()">Add Filter</button>
             <button onclick="clearFilters()">Clear All</button>
+            ${selectedFilters.size > 0 ? 
+                `<button onclick="addFilterBookmark()" class="bookmark-button">Save Filter Combination</button>` : 
+                ''}
         </div>
-        ${selectedFilters.size > 0 ? 
-            `<div class="active-filters-container">
-                <div id="activeFilters" class="active-filters"></div>
-                <div class="bookmark-button-container">
-                    <button id="saveFilterBtn" class="bookmark-button">Save Filter Combination</button>
-                </div>
-            </div>` : 
-            ''}
+        <div id="activeFilters" class="active-filters"></div>
         <div id="filterBookmarks" class="filter-bookmarks"></div>
     `;
     
-    // Re-attach event handler for the Save Filter button if it exists
-    const saveFilterBtn = document.getElementById('saveFilterBtn');
-    if (saveFilterBtn) {
-        saveFilterBtn.addEventListener('click', addFilterBookmark);
-    }
-    
-    // Re-attach event handler for the language toggle button to ensure it works after DOM changes
-    const langToggle = document.getElementById('langToggle');
-    if (langToggle) {
-        langToggle.onclick = toggleLanguage;
-    }
-    
     // Display active filters
     const activeFiltersDiv = document.getElementById('activeFilters');
-    if (activeFiltersDiv) {
-        activeFiltersDiv.innerHTML = '';
-        
-        if (selectedFilters.size > 0) {
-            // Add a label for active filters
-            const filtersLabel = document.createElement('div');
-            filtersLabel.className = 'active-filters-label';
-            filtersLabel.textContent = 'Active Filters:';
-            activeFiltersDiv.appendChild(filtersLabel);
-            
-            // Add each filter as a tag with remove button
-            selectedFilters.forEach(filter => {
-                const filterTag = document.createElement('span');
-                filterTag.className = 'filter-tag';
-                filterTag.innerHTML = `
-                    ${filter}
-                    <button onclick="removeFilter('${filter}')">&times;</button>
-                `;
-                activeFiltersDiv.appendChild(filterTag);
-            });
-        }
-    }
+    activeFiltersDiv.innerHTML = '';
+    selectedFilters.forEach(filter => {
+        const filterTag = document.createElement('span');
+        filterTag.className = 'filter-tag';
+        filterTag.innerHTML = `
+            ${filter}
+            <button onclick="removeFilter('${filter}')">&times;</button>
+        `;
+        activeFiltersDiv.appendChild(filterTag);
+    });
 
     // Update bookmarks list
     updateBookmarksList();
 }
 
-// Add additional styles for filter tags
-const additionalFilterStyles = document.createElement('style');
-additionalFilterStyles.textContent = `
-    .active-filters-container {
-        margin: 15px 0;
-        padding: 10px;
-        background: #f5f5f5;
-        border-radius: 4px;
-        border: 1px solid #e0e0e0;
-    }
+// Add a new filter
+function addFilter() {
+    const filterInput = document.getElementById('filterInput');
+    const nodeId = filterInput.value.trim();
     
-    .active-filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 10px;
+    if (nodeId && !selectedFilters.has(nodeId)) {
+        selectedFilters.add(nodeId);
+        filterInput.value = '';
+        updateFilterUI();
+        applyFilters();
     }
-    
-    .active-filters-label {
-        width: 100%;
-        margin-bottom: 8px;
-        font-weight: bold;
-        color: #555;
-    }
-    
-    .filter-tag {
-        background: #e0e0e0;
-        padding: 4px 8px;
-        border-radius: 16px;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 14px;
-    }
-    
-    .filter-tag button {
-        border: none;
-        background: none;
-        color: #666;
-        cursor: pointer;
-        padding: 0 4px;
-        font-size: 16px;
-        line-height: 1;
-    }
-    
-    .filter-tag button:hover {
-        color: #000;
-    }
-    
-    .bookmark-button-container {
-        display: flex;
-        justify-content: flex-end;
-    }
-    
-    .bookmark-button {
-        background: #2196F3;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-    }
-    
-    .bookmark-button:hover {
-        background: #1976D2;
-    }
-`;
-document.head.appendChild(additionalFilterStyles);
+}
 
 // Remove a filter
 function removeFilter(nodeId) {
@@ -1172,6 +1081,75 @@ function removeFilter(nodeId) {
     } else {
         applyFilters();
     }
+}
+
+// Clear all filters
+function clearFilters() {
+    selectedFilters.clear();
+    currentFilter = null;
+    filteredData = null;
+    currentPage = 1;
+    updateFilterUI();
+    
+    const activeView = document.querySelector('.view[style*="display: block"]').id;
+    switch (activeView) {
+        case 'notesTable':
+            loadNotesTable();
+            break;
+        case 'graph':
+            loadGraph();
+            break;
+        case 'mindmap-container':
+            loadMindMap();
+            break;
+    }
+}
+
+// Apply multiple filters
+function applyFilters() {
+    if (selectedFilters.size === 0) return;
+    
+    const nodeIds = Array.from(selectedFilters).join(',');
+    currentFilter = nodeIds;
+    currentPage = 1;
+    
+    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}&lang=${currentLanguage}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Filter failed');
+            return response.json();
+        })
+        .then(data => {
+            if (!data.nodes || data.nodes.length === 0) {
+                alert('No nodes found for these filters');
+                return;
+            }
+
+            // Store filtered data globally
+            filteredData = data;
+            
+            // Update current view based on filtered data
+            const activeView = document.querySelector('.view[style*="display: block"]').id;
+            switch (activeView) {
+                case 'notesTable':
+                    displayTablePage(data.nodes, data.rootIds);
+                    break;
+                case 'graph':
+                    updateGraph(data.nodes, data.links || [], data.rootIds);
+                    break;
+                case 'mindmap-container':
+                    const hierarchyData = data.nodes.map(node => ({
+                        id: node.child_id,
+                        content: node.child_content,
+                        parent_id: node.parent_id
+                    }));
+                    drawMindMap(hierarchyData);
+                    break;
+            }
+        })
+        .catch(error => {
+            console.error('Filter error:', error);
+            alert('Error applying filters: ' + error.message);
+        });
 }
 
 // Add styles for filter tags
@@ -1312,21 +1290,12 @@ const clientLogger = {
 // Add language toggle function
 function toggleLanguage() {
     currentLanguage = currentLanguage === 'en' ? 'zh' : 'en';
-    
     // Update UI
-    const toggleButton = document.getElementById('langToggle');
-    if (toggleButton) {
-        toggleButton.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
-    }
+    document.getElementById('langToggle').textContent = 
+        currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
     
-    // Clear any filters first to simplify state management
-    selectedFilters.clear();
-    currentFilter = null;
-    filteredData = null;
-    currentPage = 1;
-    
-    // Reload current view with new language
-    const activeView = document.querySelector('.view[style*="display: block"]')?.id;
+    // Reload current view
+    const activeView = document.querySelector('.view[style*="display: block"]').id;
     switch (activeView) {
         case 'notesTable':
             loadNotesTable();
@@ -1338,119 +1307,60 @@ function toggleLanguage() {
             loadMindMap();
             break;
     }
-    
-    // Update filter UI if needed
-    if (document.getElementById('filterSection')) {
-        updateFilterUI();
-    }
-    
-    console.log(`Language switched to: ${currentLanguage}`);
 }
 
-// Make sure language toggle is properly initialized in DOMContentLoaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize interface and other components
-    initializeInterface();
-    enhanceFormInputs();
-    
-    // Initialize existing autocomplete inputs
-    initializeAutocomplete('noteId');
-    initializeAutocomplete('noteContent');
-    initializeAutocomplete('noteContentZh');
-    initializeAutocomplete('noteParentId');
-    initializeAutocomplete('fromId');
-    initializeAutocomplete('toId');
-    initializeAutocomplete('linkDescription');
-    initializeAutocomplete('filterInput');
-    
-    // Ensure language toggle is properly set up
-    const langToggle = document.getElementById('langToggle');
-    if (langToggle) {
-        // Make sure text is correct
-        langToggle.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
+// Update handleMarkdownClick function
+async function handleMarkdownClick(nodeId) {
+    try {
+        // Get existing content
+        const response = await fetch(`${apiBase}/markdown/${nodeId}`);
+        const data = await response.json();
         
-        // Explicitly set the onclick handler
-        langToggle.onclick = toggleLanguage;
-        console.log('Language toggle initialized');
+        // Create modal dialog
+        const modal = document.createElement('div');
+        modal.className = 'markdown-modal';
+        modal.innerHTML = `
+            <div class="markdown-modal-content">
+                <h3>Notes for Node ${nodeId}</h3>
+                <textarea id="markdown-content" rows="50" cols="120">${data.content}</textarea>
+                <div class="markdown-modal-buttons">
+                    <button onclick="saveMarkdown('${nodeId}')">Save</button>
+                    <button onclick="closeMarkdownModal()">Close</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Focus the textarea
+        document.getElementById('markdown-content').focus();
+        
+    } catch (error) {
+        console.error('Error handling markdown:', error);
+        alert('An error occurred while loading the notes');
     }
-    
-    // Load bookmarks
-    loadBookmarks();
-    
-    // Show the initial view
-    const lastActiveView = localStorage.getItem('lastActiveView') || 'table';
-    showView(lastActiveView);
-});
-
-// When updating the user interface, don't try to preserve the language toggle
-// Just make sure it works in the initial state
-function initializeInterface() {
-    // ... existing code ...
-    
-    // Create language toggle container
-    const langToggleContainer = document.createElement('div');
-    langToggleContainer.className = 'language-toggle';
-    
-    // Create toggle button
-    const toggleButton = document.createElement('button');
-    toggleButton.id = 'langToggle';
-    toggleButton.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
-    toggleButton.onclick = toggleLanguage;
-    
-    // Append to container
-    langToggleContainer.appendChild(toggleButton);
-    
-    // ... rest of existing code ...
 }
 
-// Update applyFilters to be simpler - don't worry about maintaining language toggle
-function applyFilters() {
-    if (selectedFilters.size === 0) return;
-    
-    const nodeIds = Array.from(selectedFilters).join(',');
-    currentFilter = nodeIds;
-    currentPage = 1;
-    
-    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}&lang=${currentLanguage}`)
-        .then(response => {
-            if (!response.ok) throw new Error('Filter failed');
-            return response.json();
-        })
-        .then(data => {
-            if (!data.nodes || data.nodes.length === 0) {
-                alert('No nodes found for these filters');
-                return;
-            }
-
-            // Store filtered data globally
-            filteredData = data;
-            
-            // Update current view based on filtered data
-            const activeView = document.querySelector('.view[style*="display: block"]')?.id;
-            switch (activeView) {
-                case 'notesTable':
-                    displayTablePage(data.nodes, data.rootIds);
-                    break;
-                case 'graph':
-                    updateGraph(data.nodes, data.links || [], data.rootIds);
-                    break;
-                case 'mindmap-container':
-                    const hierarchyData = data.nodes.map(node => ({
-                        id: node.child_id,
-                        content: node.child_content,
-                        parent_id: node.parent_id
-                    }));
-                    drawMindMap(hierarchyData);
-                    break;
-            }
-        })
-        .catch(error => {
-            console.error('Filter error:', error);
-            alert('Error applying filters: ' + error.message);
+// Add save function
+async function saveMarkdown(nodeId) {
+    try {
+        const content = document.getElementById('markdown-content').value;
+        
+        await fetch(`${apiBase}/markdown/${nodeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ content })
         });
+        
+        closeMarkdownModal();
+        updateMarkdownIndicator(nodeId, true);
+    } catch (error) {
+        console.error('Error saving markdown:', error);
+        alert('An error occurred while saving the notes');
+    }
 }
-
-// ... existing code ...
 
 // Add close function
 function closeMarkdownModal() {
@@ -2068,909 +1978,384 @@ async function transferMarkdownFiles() {
     }
 }
 
-// Update the initializeInterface function to preserve language toggle functionality
-function initializeInterface() {
-  // First check if we've already initialized to prevent duplication
-  if (document.querySelector('.app-container')) return;
-  
-  // Create main app container
-  const appContainer = document.createElement('div');
-  appContainer.className = 'app-container';
-  
-  // Create header - but preserve any existing language toggle buttons
-  const existingToggle = document.getElementById('langToggle');
-  const toggleFunction = existingToggle ? existingToggle.onclick : null;
-  
-  const header = document.createElement('header');
-  header.className = 'app-header';
-  
-  // Create title
-  const titleElement = document.createElement('h1');
-  titleElement.className = 'app-title';
-  titleElement.textContent = 'Zettelkasten System';
-  
-  // Create language toggle container
-  const langToggleContainer = document.createElement('div');
-  langToggleContainer.className = 'language-toggle';
-  
-  // Create toggle button while preserving original onclick function
-  const toggleButton = document.createElement('button');
-  toggleButton.id = 'langToggle';
-  toggleButton.textContent = '切换到中文'; // Default text
-  
-  // If we found an existing toggle, preserve its text and function
-  if (existingToggle) {
-    toggleButton.textContent = existingToggle.textContent;
-    if (toggleFunction) {
-      toggleButton.onclick = toggleFunction;
-    }
-  }
-  
-  // Assemble header
-  langToggleContainer.appendChild(toggleButton);
-  header.appendChild(titleElement);
-  header.appendChild(langToggleContainer);
-  
-  // Create main content area
-  const mainContent = document.createElement('main');
-  mainContent.className = 'main-content';
-  
-  // Create sidebar for forms and filters
-  const sidebar = document.createElement('aside');
-  sidebar.className = 'sidebar';
-  
-  // Find existing forms
-  const noteForm = document.getElementById('noteForm');
-  const linkForm = document.getElementById('linkForm');
-  const filterSection = document.getElementById('filterSection');
-  
-  // Handle existing elements without removing them
-  if (noteForm) {
-    const noteCard = wrapInCard(noteForm, 'Add Note');
-    sidebar.appendChild(noteCard);
-  }
-  
-  if (linkForm) {
-    const linkCard = wrapInCard(linkForm, 'Add Link');
-    sidebar.appendChild(linkCard);
-  }
-  
-  if (filterSection) {
-    const filterCard = wrapInCard(filterSection, 'Filter');
-    sidebar.appendChild(filterCard);
-  }
-  
-  // Create view container
-  const viewContainer = document.createElement('div');
-  viewContainer.className = 'view-container';
-  
-  // Move view controls and views to view container
-  const viewControls = document.querySelector('.view-controls');
-  if (viewControls) {
-    viewContainer.appendChild(viewControls);
-  }
-  
-  // Move all views to view container
-  document.querySelectorAll('.view').forEach(view => {
-    viewContainer.appendChild(view);
-  });
-  
-  // Assemble the layout
-  mainContent.appendChild(sidebar);
-  mainContent.appendChild(viewContainer);
-  
-  // Remove only specific outdated elements, rather than clearing everything
-  // This preserves event handlers on elements we're not explicitly handling
-  document.querySelectorAll('h1').forEach(h => {
-    if (h !== titleElement) h.remove();
-  });
-  
-  // Insert our new structure
-  document.body.prepend(appContainer);
-  appContainer.appendChild(header);
-  appContainer.appendChild(mainContent);
-  
-  // Add CSS to body to apply new layout
-  const style = document.createElement('style');
-  style.textContent = `
-    .app-container {
-      max-width: 1600px;
-      margin: 0 auto;
-    }
-    
-    .main-content {
-      display: grid;
-      grid-template-columns: 300px 1fr;
-      gap: 20px;
-      margin-top: 20px;
-    }
-    
-    .sidebar {
-      grid-column: 1;
-    }
-    
-    .view-container {
-      grid-column: 2;
-    }
-    
-    /* Responsive layout */
-    @media (max-width: 900px) {
-      .main-content {
-        grid-template-columns: 1fr;
-      }
-      
-      .sidebar, .view-container {
-        grid-column: 1;
-      }
-    }
-    
-    /* Language toggle */
-    .language-toggle button {
-      background-color: var(--secondary-color);
-    }
-  `;
-  document.head.appendChild(style);
-}
+// Apply modern UI enhancements without disrupting functionality
+function applyModernUI() {
+    // Add modern UI base styles
+    const modernStyles = document.createElement('style');
+    modernStyles.textContent = `
+        :root {
+            --primary-color: #2196f3;
+            --secondary-color: #4caf50;
+            --accent-color: #ff5722;
+            --text-color: #333;
+            --light-gray: #f5f5f5;
+            --border-color: #ddd;
+            --error-color: #f44336;
+            --success-color: #4CAF50;
+            --radius: 8px;
+            --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
 
-// Helper function to wrap element in a card
-function wrapInCard(element, title) {
-  // Check if element is already wrapped in a card
-  if (element.parentElement && element.parentElement.classList.contains('card')) {
-    return element.parentElement;
-  }
-  
-  // Create a new card
-  const card = document.createElement('div');
-  card.className = 'card';
-  
-  // Create card title
-  const cardTitle = document.createElement('h2');
-  cardTitle.className = 'card-title';
-  cardTitle.textContent = title;
-  
-  // Clone element to preserve all event handlers
-  const elementClone = element.cloneNode(true);
-  
-  // Find all elements with event handlers in the original
-  const elementsWithHandlers = getAllElements(element);
-  elementsWithHandlers.forEach(el => {
-    // Find corresponding element in the clone
-    const selector = getUniqueSelector(el);
-    if (selector) {
-      const cloneEl = elementClone.querySelector(selector);
-      if (cloneEl) {
-        // Copy all event handlers to the clone
-        copyEventListeners(el, cloneEl);
-      }
-    }
-  });
-  
-  // Remove the original element from DOM
-  if (element.parentElement) {
-    element.parentElement.removeChild(element);
-  }
-  
-  // Add title and cloned element to card
-  card.appendChild(cardTitle);
-  card.appendChild(elementClone);
-  
-  return card;
-}
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
 
-// Helper function to get all elements inside a container
-function getAllElements(container) {
-  return [container, ...container.querySelectorAll('*')];
-}
+        h1 {
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
 
-// Helper function to get a unique selector for an element
-function getUniqueSelector(el) {
-  if (el.id) return `#${el.id}`;
-  
-  // For elements without ID, try to create a path
-  let path = '';
-  while (el && el.tagName) {
-    let selector = el.tagName.toLowerCase();
-    if (el.className) {
-      const classes = el.className.split(' ').filter(c => c).join('.');
-      if (classes) {
-        selector += `.${classes}`;
-      }
-    }
-    path = path ? `${selector} > ${path}` : selector;
-    el = el.parentElement;
-  }
-  
-  return path;
-}
+        h2 {
+            color: var(--text-color);
+            font-size: 1.2rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
 
-// Helper function to copy event listeners from one element to another
-function copyEventListeners(source, target) {
-  // For declarative event handlers (onclick, etc.)
-  const eventAttributes = ['onclick', 'onchange', 'onsubmit', 'onkeyup', 'onkeydown', 'oninput'];
-  eventAttributes.forEach(attr => {
-    if (source[attr]) {
-      target[attr] = source[attr];
-    }
-  });
-  
-  // Copy the source element's ID to ensure any JS references work
-  if (source.id && !target.id) {
-    target.id = source.id;
-  }
-}
+        /* Modern button styles */
+        button, 
+        input[type="submit"] {
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            border: none;
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
 
-// Initialize the interface after DOM loaded
-document.addEventListener('DOMContentLoaded', () => {
-  initializeInterface();
-  
-  // Initialize existing autocomplete inputs
-  initializeAutocomplete('noteId');
-  initializeAutocomplete('noteContent');
-  initializeAutocomplete('noteContentZh');
-  initializeAutocomplete('noteParentId');
-  initializeAutocomplete('fromId');
-  initializeAutocomplete('toId');
-  initializeAutocomplete('linkDescription');
-  initializeAutocomplete('filterInput');
-  
-  // Load the initial view
-  showView('table');
-});
+        button:hover {
+            background-color: #1976d2;
+        }
 
-// Enhance form design and add validation feedback
-function enhanceFormInputs() {
-  // Improve form layout
-  const formStyle = document.createElement('style');
-  formStyle.textContent = `
-    form {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 15px;
-    }
-    
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-    
-    .form-group label {
-      font-weight: 500;
-      font-size: 14px;
-      color: #555;
-    }
-    
-    .form-actions {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 10px;
-    }
-    
-    .input-error {
-      border-color: var(--error-color) !important;
-    }
-    
-    .error-message {
-      color: var(--error-color);
-      font-size: 12px;
-      margin-top: 4px;
-    }
-    
-    .input-with-icon {
-      position: relative;
-    }
-    
-    .clear-input {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: #999;
-      padding: 0;
-      font-size: 16px;
-    }
-    
-    .clear-input:hover {
-      color: var(--error-color);
-    }
-  `;
-  document.head.appendChild(formStyle);
-  
-  // Update note form structure
-  const noteForm = document.getElementById('noteForm');
-  if (noteForm) {
-    // Save the original inputs
-    const inputs = Array.from(noteForm.querySelectorAll('input'));
-    const button = noteForm.querySelector('button');
-    
-    // Clear the form
-    noteForm.innerHTML = '';
-    
-    // Rebuild the form with better structure
-    inputs.forEach(input => {
-      const formGroup = document.createElement('div');
-      formGroup.className = 'form-group';
-      
-      const label = document.createElement('label');
-      label.htmlFor = input.id;
-      label.textContent = formatLabelText(input.placeholder || input.id);
-      
-      const inputWrapper = document.createElement('div');
-      inputWrapper.className = 'input-with-icon';
-      
-      // Create new input with same properties
-      const newInput = document.createElement('input');
-      newInput.type = input.type;
-      newInput.id = input.id;
-      newInput.name = input.name;
-      newInput.placeholder = input.placeholder;
-      newInput.required = input.required;
-      newInput.className = input.className;
-      
-      // Add clear button
-      const clearButton = document.createElement('button');
-      clearButton.type = 'button';
-      clearButton.className = 'clear-input';
-      clearButton.innerHTML = '&times;';
-      clearButton.addEventListener('click', () => {
-        newInput.value = '';
-        newInput.focus();
-      });
-      
-      // Error message container
-      const errorMsg = document.createElement('div');
-      errorMsg.className = 'error-message';
-      errorMsg.style.display = 'none';
-      
-      // Add validation
-      newInput.addEventListener('invalid', (e) => {
-        e.preventDefault();
-        newInput.classList.add('input-error');
-        errorMsg.textContent = newInput.validationMessage || 'This field is required';
-        errorMsg.style.display = 'block';
-      });
-      
-      newInput.addEventListener('input', () => {
-        newInput.classList.remove('input-error');
-        errorMsg.style.display = 'none';
-      });
-      
-      inputWrapper.appendChild(newInput);
-      inputWrapper.appendChild(clearButton);
-      
-      formGroup.appendChild(label);
-      formGroup.appendChild(inputWrapper);
-      formGroup.appendChild(errorMsg);
-      
-      noteForm.appendChild(formGroup);
-    });
-    
-    // Add form actions
-    const formActions = document.createElement('div');
-    formActions.className = 'form-actions';
-    
-    // Create new button
-    const newButton = document.createElement('button');
-    newButton.type = 'submit';
-    newButton.textContent = button ? button.textContent : 'Add Note';
-    
-    formActions.appendChild(newButton);
-    noteForm.appendChild(formActions);
-  }
-  
-  // Similarly update the link form
-  const linkForm = document.getElementById('linkForm');
-  if (linkForm) {
-    // Similar restructuring for link form
-    // (I'll skip the implementation details for brevity, but it would follow the same pattern)
-  }
-}
+        button:active {
+            transform: scale(0.98);
+        }
 
-// Helper to format label text from camelCase/id
-function formatLabelText(text) {
-  // Convert camelCase to spaces
-  text = text.replace(/([A-Z])/g, ' $1');
-  // Replace underscores and hyphens with spaces
-  text = text.replace(/[_-]/g, ' ');
-  // Capitalize first letter
-  text = text.charAt(0).toUpperCase() + text.slice(1);
-  // Replace common abbreviations
-  text = text.replace(/Id\b/g, 'ID');
-  text = text.replace(/Zh\b/g, '(Chinese)');
-  return text;
-}
-
-// Add call to enhance forms in your initialization
-document.addEventListener('DOMContentLoaded', () => {
-  initializeInterface();
-  enhanceFormInputs();
-  // ... other initialization code ...
-});
-
-// Update the view controls
-function enhanceViewControls() {
-    const viewControls = document.querySelector('.view-controls');
-    if (!viewControls) return;
-    
-    // Clear existing controls
-    viewControls.innerHTML = '';
-    
-    // Add styled tabs
-    const tabStyles = document.createElement('style');
-    tabStyles.textContent = `
-        .view-tabs {
-            display: flex;
+        /* Form styles */
+        form {
             background-color: white;
+            padding: 20px;
             border-radius: var(--radius);
             box-shadow: var(--shadow);
             margin-bottom: 20px;
-            overflow: hidden;
         }
-        
-        .view-tab {
-            padding: 12px 20px;
-            border: none;
+
+        form input[type="text"],
+        form input[type="number"] {
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            font-size: 14px;
+            width: calc(100% - 30px);
+            margin-bottom: 10px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        form input[type="text"]:focus,
+        form input[type="number"]:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+        }
+
+        /* View control styles */
+        .view-controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        /* Filter section styles */
+        #filterSection {
+            background-color: white;
+            padding: 20px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin: 20px 0;
+        }
+
+        .filter-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .bookmark-button-container {
+            margin-bottom: 15px;
+        }
+
+        .bookmark-button {
+            background-color: var(--secondary-color);
+        }
+
+        .active-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .filter-tag {
+            background: var(--light-gray);
+            padding: 6px 12px;
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+        }
+
+        .filter-tag button {
             background: none;
-            color: var(--text-color);
-            font-weight: 500;
-            cursor: pointer;
-            position: relative;
-            transition: color 0.2s;
-        }
-        
-        .view-tab:hover {
-            background-color: rgba(33, 150, 243, 0.1);
-        }
-        
-        .view-tab.active-view {
-            color: var(--primary-color);
-        }
-        
-        .view-tab.active-view::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background-color: var(--primary-color);
-        }
-        
-        .view-tab .tab-icon {
-            margin-right: 8px;
+            color: #666;
+            padding: 0 4px;
             font-size: 16px;
         }
-        
-        .settings-container {
-            margin-left: auto;
-        }
-    `;
-    document.head.appendChild(tabStyles);
-    
-    // Create tabs container
-    const tabsContainer = document.createElement('div');
-    tabsContainer.className = 'view-tabs';
-    
-    // Add view tabs
-    const views = [
-        { id: 'table', icon: '📋', label: 'Table View' },
-        { id: 'graph', icon: '🔄', label: 'Graph View' },
-        { id: 'mindmap', icon: '🧠', label: 'Mind Map' },
-        { id: 'terminal', icon: '💻', label: 'Terminal' }
-    ];
-    
-    views.forEach(view => {
-        const tab = document.createElement('button');
-        tab.className = 'view-tab';
-        tab.setAttribute('data-view', view.id);
-        tab.innerHTML = `<span class="tab-icon">${view.icon}</span> ${view.label}`;
-        tab.addEventListener('click', () => showView(view.id));
-        tabsContainer.appendChild(tab);
-    });
-    
-    // Add settings container
-    const settingsContainer = document.createElement('div');
-    settingsContainer.className = 'settings-container';
-    
-    // Add transfer markdown button
-    const transferButton = document.createElement('button');
-    transferButton.className = 'view-tab';
-    transferButton.innerHTML = '<span class="tab-icon">📁</span> Transfer Files';
-    transferButton.addEventListener('click', () => transferMarkdownFiles());
-    
-    settingsContainer.appendChild(transferButton);
-    tabsContainer.appendChild(settingsContainer);
-    
-    // Add tabs to the view controls
-    viewControls.appendChild(tabsContainer);
-    
-    // Load last active view or default to table
-    const lastActiveView = localStorage.getItem('lastActiveView') || 'table';
-    showView(lastActiveView);
-}
 
-// Update table display with better controls
-function enhanceTableView() {
-    // Style for enhanced table
-    const tableStyles = document.createElement('style');
-    tableStyles.textContent = `
+        /* Table styles */
         #notesTable {
             width: 100%;
             border-collapse: collapse;
-            border-radius: var(--radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
         }
-        
-        #notesTable thead {
+
+        #notesTable th,
+        #notesTable td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #notesTable th {
             background-color: var(--primary-color);
             color: white;
-        }
-        
-        #notesTable th {
-            text-align: left;
-            padding: 12px 16px;
             font-weight: 500;
-            cursor: pointer;
-            position: relative;
         }
-        
-        #notesTable th::after {
-            content: '⇕';
-            margin-left: 5px;
-            font-size: 12px;
-            opacity: 0.5;
-        }
-        
-        #notesTable th.sort-asc::after {
-            content: '↓';
-            opacity: 1;
-        }
-        
-        #notesTable th.sort-desc::after {
-            content: '↑';
-            opacity: 1;
-        }
-        
-        #notesTable td {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: top;
-        }
-        
-        #notesTable tr:hover td {
+
+        #notesTable tbody tr:hover {
             background-color: rgba(33, 150, 243, 0.05);
         }
-        
-        #notesTable tr.highlighted td {
-            background-color: rgba(255, 87, 34, 0.08);
-        }
-        
-        .table-actions {
+
+        /* Bookmark styles */
+        .filter-bookmark {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .table-search {
-            position: relative;
-            max-width: 300px;
-        }
-        
-        .table-search input {
-            padding-left: 35px;
-        }
-        
-        .table-search::before {
-            content: '🔍';
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            opacity: 0.5;
-        }
-        
-        .pagination {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            padding: 10px;
+            margin-bottom: 8px;
             background-color: white;
-            padding: 10px 15px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+        }
+
+        .bookmark-info {
+            flex: 1;
+        }
+
+        .bookmark-name {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .bookmark-filters {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .bookmark-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .apply-bookmark {
+            background-color: var(--secondary-color);
+        }
+
+        .delete-bookmark {
+            background-color: var(--error-color);
+        }
+
+        /* Terminal styles */
+        .terminal-container {
+            background-color: #1e1e1e;
             border-radius: var(--radius);
             box-shadow: var(--shadow);
         }
-        
-        .pagination button {
-            min-width: 40px;
+
+        /* Make sure SVG containers fit properly */
+        svg {
+            background-color: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
         }
-        
-        .pagination button.active {
-            background-color: var(--primary-color);
-            color: white;
+
+        /* Layout improvements */
+        @media (min-width: 1200px) {
+            .layout-container {
+                display: grid;
+                grid-template-columns: 350px 1fr;
+                gap: 20px;
+            }
+
+            .forms-container {
+                grid-column: 1;
+            }
+
+            .view-container {
+                grid-column: 2;
+            }
         }
     `;
-    document.head.appendChild(tableStyles);
-    
-    // Update function to enhance the table display
-    const enhanceTable = () => {
-        const tableContainer = document.getElementById('notesTable');
-        if (!tableContainer) return;
-        
-        // Add table actions section before the table
-        if (!document.querySelector('.table-actions')) {
-            const actionsContainer = document.createElement('div');
-            actionsContainer.className = 'table-actions';
-            
-            // Add search input
-            const searchContainer = document.createElement('div');
-            searchContainer.className = 'table-search';
-            
-            const searchInput = document.createElement('input');
-            searchInput.type = 'text';
-            searchInput.placeholder = 'Search notes...';
-            searchInput.id = 'table-search-input';
-            searchInput.addEventListener('input', (e) => {
-                const searchTerm = e.target.value.toLowerCase();
-                const rows = tableContainer.querySelectorAll('tbody tr');
-                
-                rows.forEach(row => {
-                    const text = row.textContent.toLowerCase();
-                    if (text.includes(searchTerm)) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-            });
-            
-            searchContainer.appendChild(searchInput);
-            actionsContainer.appendChild(searchContainer);
-            
-            // Insert before table
-            tableContainer.parentNode.insertBefore(actionsContainer, tableContainer);
+    document.head.appendChild(modernStyles);
+
+    // Fix form layout and ensure submit buttons
+    const noteForm = document.getElementById('noteForm');
+    if (noteForm) {
+        // Ensure form has a submit button
+        if (!noteForm.querySelector('button[type="submit"]')) {
+            const submitButton = document.createElement('button');
+            submitButton.type = 'submit';
+            submitButton.textContent = 'Add Note';
+            noteForm.appendChild(submitButton);
         }
+    }
+
+    // Improve filter UI implementation
+    const originalUpdateFilterUI = window.updateFilterUI;
+    window.updateFilterUI = function() {
+        const filterSection = document.getElementById('filterSection');
+        if (!filterSection) return;
         
-        // Add sorting functionality to table headers
-        const headers = tableContainer.querySelectorAll('thead th');
-        headers.forEach((header, index) => {
-            header.addEventListener('click', () => {
-                // Remove sort indicators from all headers
-                headers.forEach(h => {
-                    h.classList.remove('sort-asc', 'sort-desc');
-                });
-                
-                const isAscending = header.classList.contains('sort-desc');
-                header.classList.add(isAscending ? 'sort-asc' : 'sort-desc');
-                
-                // Sort table rows
-                const rows = Array.from(tableContainer.querySelectorAll('tbody tr'));
-                rows.sort((a, b) => {
-                    const aValue = a.cells[index].textContent;
-                    const bValue = b.cells[index].textContent;
-                    
-                    return isAscending 
-                        ? aValue.localeCompare(bValue) 
-                        : bValue.localeCompare(aValue);
-                });
-                
-                // Reorder rows in the DOM
-                const tbody = tableContainer.querySelector('tbody');
-                rows.forEach(row => tbody.appendChild(row));
-            });
+        filterSection.innerHTML = `
+            <div class="filter-input-group">
+                <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
+                <button onclick="addFilter()">Add Filter</button>
+                <button onclick="clearFilters()">Clear All</button>
+            </div>
+            ${selectedFilters.size > 0 ? 
+                `<div class="bookmark-button-container">
+                    <button onclick="addFilterBookmark()" class="bookmark-button">Save Filter Combination</button>
+                </div>` : 
+                ''}
+            <div id="activeFilters" class="active-filters"></div>
+            <div id="filterBookmarks" class="filter-bookmarks"></div>
+        `;
+        
+        // Display active filters
+        const activeFiltersDiv = document.getElementById('activeFilters');
+        activeFiltersDiv.innerHTML = '';
+        selectedFilters.forEach(filter => {
+            const filterTag = document.createElement('span');
+            filterTag.className = 'filter-tag';
+            filterTag.innerHTML = `
+                ${filter}
+                <button onclick="removeFilter('${filter}')">&times;</button>
+            `;
+            activeFiltersDiv.appendChild(filterTag);
         });
+
+        // Update bookmarks list
+        updateBookmarksList();
     };
-    
-    // Call initially and observe for changes
-    enhanceTable();
-    
-    // Update the original displayTablePage function to work with enhancements
-    const originalDisplayTablePage = displayTablePage;
-    window.displayTablePage = function(rows, rootId, totalRows = null) {
-        originalDisplayTablePage(rows, rootId, totalRows);
-        enhanceTable();
+
+    // Create responsive layout container
+    const createLayout = () => {
+        // Avoid duplicate layout
+        if (document.querySelector('.layout-container')) return;
+
+        // Get the main content elements
+        const mainContent = document.body.innerHTML;
+        
+        // Clear body content
+        document.body.innerHTML = '';
+        
+        // Create new layout structure
+        const layoutContainer = document.createElement('div');
+        layoutContainer.className = 'layout-container';
+        
+        // Original content goes back in
+        document.body.appendChild(layoutContainer);
+        layoutContainer.innerHTML = mainContent;
+        
+        // Reorganize elements
+        const formsContainer = document.createElement('div');
+        formsContainer.className = 'forms-container';
+        
+        const viewContainer = document.createElement('div');
+        viewContainer.className = 'view-container';
+        
+        // Move forms to forms container
+        const noteForm = document.getElementById('noteForm');
+        const linkForm = document.getElementById('linkForm');
+        const filterSection = document.getElementById('filterSection');
+        
+        if (noteForm) formsContainer.appendChild(noteForm);
+        if (linkForm) formsContainer.appendChild(linkForm);
+        if (filterSection) formsContainer.appendChild(filterSection);
+        
+        // Move views to view container
+        const notesTable = document.getElementById('notesTable');
+        const graph = document.getElementById('graph');
+        const mindmap = document.getElementById('mindmap-container');
+        const terminal = document.getElementById('terminal');
+        const viewControls = document.querySelector('.view-controls');
+        
+        if (viewControls) viewContainer.appendChild(viewControls);
+        if (notesTable) viewContainer.appendChild(notesTable);
+        if (graph) viewContainer.appendChild(graph);
+        if (mindmap) viewContainer.appendChild(mindmap);
+        if (terminal) viewContainer.appendChild(terminal);
+        
+        // Add containers to layout
+        layoutContainer.appendChild(formsContainer);
+        layoutContainer.appendChild(viewContainer);
     };
-}
 
-// ... existing code ...
-
-// Add calls to all enhancers in initialization
-document.addEventListener('DOMContentLoaded', () => {
-    initializeInterface();
-    enhanceFormInputs();
-    enhanceViewControls();
-    enhanceTableView();
-    
-    // Initialize existing autocomplete inputs
-    initializeAutocomplete('noteId');
-    initializeAutocomplete('noteContent');
-    initializeAutocomplete('noteContentZh');
-    initializeAutocomplete('noteParentId');
-    initializeAutocomplete('fromId');
-    initializeAutocomplete('toId');
-    initializeAutocomplete('linkDescription');
-    initializeAutocomplete('filterInput');
-});
-
-// Update the form initialization
-function enhanceFormInputs() {
-    // Add Note form
-    const noteForm = document.getElementById('noteForm');
-    if (noteForm) {
-        // Make sure the form has a submit button
-        if (!noteForm.querySelector('button[type="submit"]')) {
-            const submitButton = document.createElement('button');
-            submitButton.type = 'submit';
-            submitButton.textContent = 'Add Note';
-            noteForm.appendChild(submitButton);
+    // After the page loads, apply these modifications
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            // Make sure there's only one title
+            const titleElements = document.querySelectorAll('h1');
+            if (titleElements.length > 1) {
+                for (let i = 1; i < titleElements.length; i++) {
+                    titleElements[i].remove();
+                }
+            }
+            
+            createLayout();
+            
+            // Initialize filter UI
+            if (window.updateFilterUI) {
+                window.updateFilterUI();
+            }
+        });
+    } else {
+        // Page already loaded
+        const titleElements = document.querySelectorAll('h1');
+        if (titleElements.length > 1) {
+            for (let i = 1; i < titleElements.length; i++) {
+                titleElements[i].remove();
+            }
         }
         
-        // Add submit handler
-        noteForm.onsubmit = handleNoteSubmit;
-    }
-    
-    // Link form handling
-    const linkForm = document.getElementById('linkForm');
-    if (linkForm) {
-        linkForm.onsubmit = handleLinkSubmit;
-    }
-}
-
-// ... existing code ...
-
-// Add these functions to handle form submissions
-function handleNoteSubmit(e) {
-    e.preventDefault();
-  
-    const id = document.getElementById("noteId").value;
-    const content = document.getElementById("noteContent").value;
-    const content_zh = document.getElementById("noteContentZh").value;
-    const parent_id = document.getElementById("noteParentId").value;
-
-    // Store recent inputs
-    addRecentInput('noteId', id);
-    addRecentInput('noteContent', content);
-    addRecentInput('noteContentZh', content_zh);
-    addRecentInput('noteParentId', parent_id);
-  
-    fetch(`${apiBase}/notes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, content, content_zh, parent_id }),
-    }).then(() => {
-      alert("Note added!");
-      loadGraph();
-      loadNotesTable();
-      document.getElementById("noteForm").reset();
-    });
-}
-
-function handleLinkSubmit(e) {
-    e.preventDefault();
-  
-    const from_id = document.getElementById("fromId").value;
-    const to_id = document.getElementById("toId").value;
-    const description = document.getElementById("linkDescription").value;
-    const weight = parseFloat(document.getElementById("linkWeight").value) || 0;
-
-    // Store recent inputs
-    addRecentInput('fromId', from_id);
-    addRecentInput('toId', to_id);
-    addRecentInput('linkDescription', description);
-  
-    fetch(`${apiBase}/links`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from_id, to_id, description, weight }),
-    }).then(() => {
-      alert("Link added!");
-      loadGraph();
-      document.getElementById("linkForm").reset(); // Clear form
-    });
-}
-
-// Update the enhanceFormInputs function to properly handle form submissions
-function enhanceFormInputs() {
-    // Add styles for forms
-    const formStyle = document.createElement('style');
-    formStyle.textContent = `
-        form {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
-        }
+        createLayout();
         
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .form-group label {
-            font-weight: 500;
-            font-size: 14px;
-            color: #555;
-        }
-        
-        .form-actions {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 10px;
-        }
-        
-        .input-error {
-            border-color: var(--error-color) !important;
-        }
-        
-        .error-message {
-            color: var(--error-color);
-            font-size: 12px;
-            margin-top: 4px;
-        }
-        
-        .input-with-icon {
-            position: relative;
-        }
-        
-        .clear-input {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: #999;
-            padding: 0;
-            font-size: 16px;
-        }
-        
-        .clear-input:hover {
-            color: var(--error-color);
-        }
-    `;
-    document.head.appendChild(formStyle);
-    
-    // Note form handling - preserve the original form submission
-    const noteForm = document.getElementById('noteForm');
-    if (noteForm) {
-        // Remove any existing onsubmit handler to avoid duplicates
-        const oldSubmit = noteForm.onsubmit;
-        noteForm.onsubmit = null;
-        
-        // Add the event listener directly
-        noteForm.addEventListener('submit', handleNoteSubmit);
-        
-        // Make sure the form has a submit button
-        if (!noteForm.querySelector('button[type="submit"]')) {
-            const submitButton = document.createElement('button');
-            submitButton.type = 'submit';
-            submitButton.textContent = 'Add Note';
-            noteForm.appendChild(submitButton);
-        }
-    }
-    
-    // Link form handling - preserve the original form submission
-    const linkForm = document.getElementById('linkForm');
-    if (linkForm) {
-        // Remove any existing onsubmit handler to avoid duplicates
-        const oldSubmit = linkForm.onsubmit;
-        linkForm.onsubmit = null;
-        
-        // Add the event listener directly
-        linkForm.addEventListener('submit', handleLinkSubmit);
-        
-        // Make sure the form has a submit button
-        if (!linkForm.querySelector('button[type="submit"]')) {
-            const submitButton = document.createElement('button');
-            submitButton.type = 'submit';
-            submitButton.textContent = 'Add Link';
-            linkForm.appendChild(submitButton);
+        // Initialize filter UI
+        if (window.updateFilterUI) {
+            window.updateFilterUI();
         }
     }
 }
 
-// ... existing code ...
+// Call the function to apply modern UI
+applyModernUI();
