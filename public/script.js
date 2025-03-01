@@ -303,54 +303,19 @@ document.getElementById("noteForm").addEventListener("submit", (e) => {
     });
 });
 
-function applyFilter() {
+function addFilter() {
     const nodeId = document.getElementById('filterInput').value.trim();
     if (!nodeId) return;
 
-    currentFilter = nodeId;
-    currentPage = 1; // Reset to first page when filtering
-    
-    fetch(`${apiBase}/filter/${nodeId}?lang=${currentLanguage}`)
-        .then(response => {
-            if (!response.ok) throw new Error('Filter failed');
-            return response.json();
-        })
-        .then(data => {
-            if (!data.nodes || data.nodes.length === 0) {
-                alert('No nodes found for this filter');
-                return;
-            }
-
-            filteredData = data; // Store filtered data
-            const activeView = document.querySelector('.view[style*="display: block"]').id;
-            
-            switch (activeView) {
-                case 'notesTable':
-                    displayTablePage(data.nodes, data.rootId);
-                    break;
-                case 'graph':
-                    updateGraph(data.nodes, data.links || [], data.rootId);
-                    break;
-                case 'mindmap-container':
-                    const hierarchyData = data.nodes.map(node => ({
-                        id: node.child_id,
-                        content: node.child_content,
-                        parent_id: node.parent_id
-                    }));
-                    drawMindMap(hierarchyData);
-                    break;
-            }
-        })
-        .catch(error => {
-            console.error('Filter error:', error);
-            alert('Error applying filter: ' + error.message);
-        });
+    selectedFilters.add(nodeId);
+    applyFilters();
 }
 
-function clearFilter() {
+function clearFilters() {
+    selectedFilters.clear();
     currentFilter = null;
     filteredData = null;
-    currentPage = 1; // Reset to first page when clearing filter
+    currentPage = 1;
     document.getElementById('filterInput').value = '';
     
     const activeView = document.querySelector('.view[style*="display: block"]').id;
@@ -368,26 +333,52 @@ function clearFilter() {
     }
 }
 
-function updateTable(rows, rootId) {
-    const tableBody = document.querySelector("#notesTable tbody");
-    tableBody.innerHTML = "";
-  
-    rows.forEach(row => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${row.child_id}</td>
-        <td>${row.child_content}</td>
-        <td>${row.parent_id || "-"}</td>
-        <td>${row.parent_content || "-"}</td>
-      `;
-      // Highlight root node
-      if (row.child_id === rootId) {
-        tr.style.backgroundColor = '#ffeeba';
-      }
-      tableBody.appendChild(tr);
-    });
+function applyFilters() {
+    if (selectedFilters.size === 0) return;
+    
+    const nodeIds = Array.from(selectedFilters).join(',');
+    currentFilter = nodeIds;
+    currentPage = 1;
+    
+    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}&lang=${currentLanguage}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Filter failed');
+            return response.json();
+        })
+        .then(data => {
+            if (!data.nodes || data.nodes.length === 0) {
+                alert('No nodes found for these filters');
+                return;
+            }
+
+            // Store filtered data globally
+            filteredData = data;
+            
+            // Update current view based on filtered data
+            const activeView = document.querySelector('.view[style*="display: block"]')?.id;
+            switch (activeView) {
+                case 'notesTable':
+                    displayTablePage(data.nodes, data.rootIds);
+                    break;
+                case 'graph':
+                    updateGraph(data.nodes, data.links || [], data.rootIds);
+                    break;
+                case 'mindmap-container':
+                    const hierarchyData = data.nodes.map(node => ({
+                        id: node.child_id,
+                        content: node.child_content,
+                        parent_id: node.parent_id
+                    }));
+                    drawMindMap(hierarchyData);
+                    break;
+            }
+        })
+        .catch(error => {
+            console.error('Filter error:', error);
+            alert('Error applying filters: ' + error.message);
+        });
 }
-  
+
 // Modify the updateGraph function to invert the weight for visualization
 function updateGraph(nodes, links, rootIds) {
     try {
@@ -1086,19 +1077,6 @@ function updateFilterUI() {
     updateBookmarksList();
 }
 
-// Add a new filter
-function addFilter() {
-    const filterInput = document.getElementById('filterInput');
-    const nodeId = filterInput.value.trim();
-    
-    if (nodeId && !selectedFilters.has(nodeId)) {
-        selectedFilters.add(nodeId);
-        filterInput.value = '';
-        updateFilterUI();
-        applyFilters();
-    }
-}
-
 // Remove a filter
 function removeFilter(nodeId) {
     selectedFilters.delete(nodeId);
@@ -1108,81 +1086,6 @@ function removeFilter(nodeId) {
     } else {
         applyFilters();
     }
-}
-
-// Clear all filters
-function clearFilters() {
-    selectedFilters.clear();
-    currentFilter = null;
-    filteredData = null;
-    currentPage = 1;
-    updateFilterUI();
-    
-    const activeView = document.querySelector('.view[style*="display: block"]').id;
-    switch (activeView) {
-        case 'notesTable':
-            loadNotesTable();
-            break;
-        case 'graph':
-            loadGraph();
-            break;
-        case 'mindmap-container':
-            loadMindMap();
-            break;
-    }
-}
-
-// Apply multiple filters
-function applyFilters() {
-    if (selectedFilters.size === 0) return;
-    
-    const nodeIds = Array.from(selectedFilters).join(',');
-    currentFilter = nodeIds;
-    currentPage = 1;
-    
-    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}&lang=${currentLanguage}`)
-        .then(response => {
-            if (!response.ok) throw new Error('Filter failed');
-            return response.json();
-        })
-        .then(data => {
-            if (!data.nodes || data.nodes.length === 0) {
-                alert('No nodes found for these filters');
-                return;
-            }
-
-            // Store filtered data globally
-            filteredData = data;
-            
-            // Update current view based on filtered data
-            const activeView = document.querySelector('.view[style*="display: block"]').id;
-            switch (activeView) {
-                case 'notesTable':
-                    displayTablePage(data.nodes, data.rootIds);
-                    break;
-                case 'graph':
-                    updateGraph(data.nodes, data.links || [], data.rootIds);
-                    break;
-                case 'mindmap-container':
-                    const hierarchyData = data.nodes.map(node => ({
-                        id: node.child_id,
-                        content: node.child_content,
-                        parent_id: node.parent_id
-                    }));
-                    drawMindMap(hierarchyData);
-                    break;
-            }
-            
-            // Ensure language toggle works after updating the UI
-            const langToggle = document.getElementById('langToggle');
-            if (langToggle) {
-                langToggle.onclick = toggleLanguage;
-            }
-        })
-        .catch(error => {
-            console.error('Filter error:', error);
-            alert('Error applying filters: ' + error.message);
-        });
 }
 
 // Add styles for filter tags
@@ -1323,12 +1226,21 @@ const clientLogger = {
 // Add language toggle function
 function toggleLanguage() {
     currentLanguage = currentLanguage === 'en' ? 'zh' : 'en';
-    // Update UI
-    document.getElementById('langToggle').textContent = 
-        currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
     
-    // Reload current view
-    const activeView = document.querySelector('.view[style*="display: block"]').id;
+    // Update UI
+    const toggleButton = document.getElementById('langToggle');
+    if (toggleButton) {
+        toggleButton.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
+    }
+    
+    // Clear any filters first to simplify state management
+    selectedFilters.clear();
+    currentFilter = null;
+    filteredData = null;
+    currentPage = 1;
+    
+    // Reload current view with new language
+    const activeView = document.querySelector('.view[style*="display: block"]')?.id;
     switch (activeView) {
         case 'notesTable':
             loadNotesTable();
@@ -1340,60 +1252,119 @@ function toggleLanguage() {
             loadMindMap();
             break;
     }
-}
-
-// Update handleMarkdownClick function
-async function handleMarkdownClick(nodeId) {
-    try {
-        // Get existing content
-        const response = await fetch(`${apiBase}/markdown/${nodeId}`);
-        const data = await response.json();
-        
-        // Create modal dialog
-        const modal = document.createElement('div');
-        modal.className = 'markdown-modal';
-        modal.innerHTML = `
-            <div class="markdown-modal-content">
-                <h3>Notes for Node ${nodeId}</h3>
-                <textarea id="markdown-content" rows="50" cols="120">${data.content}</textarea>
-                <div class="markdown-modal-buttons">
-                    <button onclick="saveMarkdown('${nodeId}')">Save</button>
-                    <button onclick="closeMarkdownModal()">Close</button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Focus the textarea
-        document.getElementById('markdown-content').focus();
-        
-    } catch (error) {
-        console.error('Error handling markdown:', error);
-        alert('An error occurred while loading the notes');
+    
+    // Update filter UI if needed
+    if (document.getElementById('filterSection')) {
+        updateFilterUI();
     }
+    
+    console.log(`Language switched to: ${currentLanguage}`);
 }
 
-// Add save function
-async function saveMarkdown(nodeId) {
-    try {
-        const content = document.getElementById('markdown-content').value;
+// Make sure language toggle is properly initialized in DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize interface and other components
+    initializeInterface();
+    enhanceFormInputs();
+    
+    // Initialize existing autocomplete inputs
+    initializeAutocomplete('noteId');
+    initializeAutocomplete('noteContent');
+    initializeAutocomplete('noteContentZh');
+    initializeAutocomplete('noteParentId');
+    initializeAutocomplete('fromId');
+    initializeAutocomplete('toId');
+    initializeAutocomplete('linkDescription');
+    initializeAutocomplete('filterInput');
+    
+    // Ensure language toggle is properly set up
+    const langToggle = document.getElementById('langToggle');
+    if (langToggle) {
+        // Make sure text is correct
+        langToggle.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
         
-        await fetch(`${apiBase}/markdown/${nodeId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ content })
+        // Explicitly set the onclick handler
+        langToggle.onclick = toggleLanguage;
+        console.log('Language toggle initialized');
+    }
+    
+    // Load bookmarks
+    loadBookmarks();
+    
+    // Show the initial view
+    const lastActiveView = localStorage.getItem('lastActiveView') || 'table';
+    showView(lastActiveView);
+});
+
+// When updating the user interface, don't try to preserve the language toggle
+// Just make sure it works in the initial state
+function initializeInterface() {
+    // ... existing code ...
+    
+    // Create language toggle container
+    const langToggleContainer = document.createElement('div');
+    langToggleContainer.className = 'language-toggle';
+    
+    // Create toggle button
+    const toggleButton = document.createElement('button');
+    toggleButton.id = 'langToggle';
+    toggleButton.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
+    toggleButton.onclick = toggleLanguage;
+    
+    // Append to container
+    langToggleContainer.appendChild(toggleButton);
+    
+    // ... rest of existing code ...
+}
+
+// Update applyFilters to be simpler - don't worry about maintaining language toggle
+function applyFilters() {
+    if (selectedFilters.size === 0) return;
+    
+    const nodeIds = Array.from(selectedFilters).join(',');
+    currentFilter = nodeIds;
+    currentPage = 1;
+    
+    fetch(`${apiBase}/filter-multiple?nodes=${nodeIds}&lang=${currentLanguage}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Filter failed');
+            return response.json();
+        })
+        .then(data => {
+            if (!data.nodes || data.nodes.length === 0) {
+                alert('No nodes found for these filters');
+                return;
+            }
+
+            // Store filtered data globally
+            filteredData = data;
+            
+            // Update current view based on filtered data
+            const activeView = document.querySelector('.view[style*="display: block"]')?.id;
+            switch (activeView) {
+                case 'notesTable':
+                    displayTablePage(data.nodes, data.rootIds);
+                    break;
+                case 'graph':
+                    updateGraph(data.nodes, data.links || [], data.rootIds);
+                    break;
+                case 'mindmap-container':
+                    const hierarchyData = data.nodes.map(node => ({
+                        id: node.child_id,
+                        content: node.child_content,
+                        parent_id: node.parent_id
+                    }));
+                    drawMindMap(hierarchyData);
+                    break;
+            }
+        })
+        .catch(error => {
+            console.error('Filter error:', error);
+            alert('Error applying filters: ' + error.message);
         });
-        
-        closeMarkdownModal();
-        updateMarkdownIndicator(nodeId, true);
-    } catch (error) {
-        console.error('Error saving markdown:', error);
-        alert('An error occurred while saving the notes');
-    }
 }
+
+// ... existing code ...
 
 // Add close function
 function closeMarkdownModal() {
@@ -2736,4 +2707,113 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAutocomplete('toId');
     initializeAutocomplete('linkDescription');
     initializeAutocomplete('filterInput');
+});
+
+// Update the form initialization
+function enhanceFormInputs() {
+    // Add Note form
+    const noteForm = document.getElementById('noteForm');
+    if (noteForm) {
+        // Make sure the form has a submit button
+        if (!noteForm.querySelector('button[type="submit"]')) {
+            const submitButton = document.createElement('button');
+            submitButton.type = 'submit';
+            submitButton.textContent = 'Add Note';
+            noteForm.appendChild(submitButton);
+        }
+        
+        // Add submit handler
+        noteForm.onsubmit = handleNoteSubmit;
+    }
+    
+    // Link form handling
+    const linkForm = document.getElementById('linkForm');
+    if (linkForm) {
+        linkForm.onsubmit = handleLinkSubmit;
+    }
+}
+
+// Updated filter section in HTML to fix duplicate heading
+function updateFilterUI() {
+    const filterSection = document.getElementById('filterSection');
+    filterSection.innerHTML = `
+        <div class="filter-input-group">
+            <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
+            <button onclick="addFilter()">Add Filter</button>
+            <button onclick="clearFilters()">Clear All</button>
+        </div>
+        ${selectedFilters.size > 0 ? 
+            `<div class="bookmark-button-container">
+                <button id="saveFilterBtn" class="bookmark-button">Save Filter Combination</button>
+            </div>` : 
+            ''}
+        <div id="activeFilters" class="active-filters"></div>
+        <div id="filterBookmarks" class="filter-bookmarks"></div>
+    `;
+    
+    // Re-attach event handler for the Save Filter button if it exists
+    const saveFilterBtn = document.getElementById('saveFilterBtn');
+    if (saveFilterBtn) {
+        saveFilterBtn.addEventListener('click', addFilterBookmark);
+    }
+    
+    // Re-attach event handler for the language toggle button to ensure it works after DOM changes
+    const langToggle = document.getElementById('langToggle');
+    if (langToggle) {
+        langToggle.onclick = toggleLanguage;
+    }
+    
+    // Display active filters
+    const activeFiltersDiv = document.getElementById('activeFilters');
+    activeFiltersDiv.innerHTML = '';
+    selectedFilters.forEach(filter => {
+        const filterTag = document.createElement('span');
+        filterTag.className = 'filter-tag';
+        filterTag.innerHTML = `
+            ${filter}
+            <button onclick="removeFilter('${filter}')">&times;</button>
+        `;
+        activeFiltersDiv.appendChild(filterTag);
+    });
+
+    // Update bookmarks list
+    updateBookmarksList();
+}
+
+// Make sure our DOMContentLoaded handler runs enhanceFormInputs
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize interface and other components
+    initializeInterface();
+    enhanceFormInputs(); // This will add the missing "Add Note" button
+    
+    // Initialize existing autocomplete inputs
+    initializeAutocomplete('noteId');
+    initializeAutocomplete('noteContent');
+    initializeAutocomplete('noteContentZh');
+    initializeAutocomplete('noteParentId');
+    initializeAutocomplete('fromId');
+    initializeAutocomplete('toId');
+    initializeAutocomplete('linkDescription');
+    initializeAutocomplete('filterInput');
+    
+    // Ensure language toggle is properly set up
+    const langToggle = document.getElementById('langToggle');
+    if (langToggle) {
+        // Make sure text is correct
+        langToggle.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
+        
+        // Explicitly set the onclick handler
+        langToggle.onclick = toggleLanguage;
+        console.log('Language toggle initialized');
+    }
+    
+    // Load bookmarks
+    loadBookmarks();
+    
+    // Show the initial view
+    const lastActiveView = localStorage.getItem('lastActiveView') || 'table';
+    showView(lastActiveView);
+    
+    // Update filter UI to prevent duplicate heading
+    updateFilterUI();
 });
