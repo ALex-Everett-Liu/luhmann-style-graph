@@ -520,36 +520,52 @@ function updateGraph(nodes, links, rootIds) {
 let mindmapData = null;
 
 function showView(viewName) {
-    console.log('Switching to view:', viewName);
+    console.log('Showing view:', viewName);
     
     // Hide all views
     document.querySelectorAll('.view').forEach(view => {
         view.style.display = 'none';
+        view.classList.remove('active');
     });
-
-    // Show selected view
-    let targetView;
-    switch(viewName) {
+    
+    // Show the selected view
+    let viewElement;
+    
+    switch (viewName) {
         case 'table':
-            targetView = document.getElementById('notesTable');
-            loadNotesTable(); // Reload table data
+            viewElement = document.getElementById('notesTable');
+            if (viewElement) {
+                viewElement.style.display = 'block';
+                viewElement.classList.add('active');
+                loadNotesTable();
+            }
             break;
         case 'graph':
-            targetView = document.getElementById('graph');
-            loadGraph(); // Reload graph
+            viewElement = document.getElementById('graph');
+            if (viewElement) {
+                viewElement.style.display = 'block';
+                viewElement.classList.add('active');
+                loadGraph();
+            }
             break;
         case 'mindmap':
-            targetView = document.getElementById('mindmap-container');
-            loadMindMap(); // Reload mindmap
+            viewElement = document.getElementById('mindmap-container');
+            if (viewElement) {
+                viewElement.style.display = 'block';
+                viewElement.classList.add('active');
+                loadMindMap();
+            }
             break;
         case 'terminal':
-            targetView = document.getElementById('terminal');
+            viewElement = document.getElementById('terminal');
+            if (viewElement) {
+                viewElement.style.display = 'block';
+                viewElement.classList.add('active');
+            }
             break;
     }
-
-    if (targetView) {
-        targetView.style.display = 'block';
-    }
+    
+    console.log('View element:', viewElement);
 }
 
 function loadMindMap() {
@@ -1287,16 +1303,30 @@ const clientLogger = {
     }
 };
 
-// Add language toggle function
+// Fix language toggle function
 function toggleLanguage() {
     currentLanguage = currentLanguage === 'en' ? 'zh' : 'en';
     // Update UI
     document.getElementById('langToggle').textContent = 
         currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
     
+    // Find the active view - updated selector to work with the new UI
+    const activeView = document.querySelector('.view.active') || 
+                       document.querySelector('.view[style*="display: block"]');
+    
+    if (!activeView) {
+        console.error('No active view found');
+        // Default to table view if no active view is found
+        loadNotesTable();
+        return;
+    }
+    
+    // Get the ID of the active view
+    const activeViewId = activeView.id;
+    console.log('Active view:', activeViewId);
+    
     // Reload current view
-    const activeView = document.querySelector('.view[style*="display: block"]').id;
-    switch (activeView) {
+    switch (activeViewId) {
         case 'notesTable':
             loadNotesTable();
             break;
@@ -1306,6 +1336,10 @@ function toggleLanguage() {
         case 'mindmap-container':
             loadMindMap();
             break;
+        default:
+            console.warn('Unknown view ID:', activeViewId);
+            // Default to table view
+            loadNotesTable();
     }
 }
 
