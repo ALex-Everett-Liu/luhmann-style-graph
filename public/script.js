@@ -1033,6 +1033,8 @@ showView('table'); // Start with table view
 // Update the filter section HTML in your index.html
 function updateFilterUI() {
     const filterSection = document.getElementById('filterSection');
+    if (!filterSection) return;
+    
     filterSection.innerHTML = `
         <div class="filter-input-group">
             <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
@@ -1040,11 +1042,13 @@ function updateFilterUI() {
             <button onclick="clearFilters()">Clear All</button>
         </div>
         ${selectedFilters.size > 0 ? 
-            `<div class="bookmark-button-container">
-                <button id="saveFilterBtn" class="bookmark-button">Save Filter Combination</button>
+            `<div class="active-filters-container">
+                <div id="activeFilters" class="active-filters"></div>
+                <div class="bookmark-button-container">
+                    <button id="saveFilterBtn" class="bookmark-button">Save Filter Combination</button>
+                </div>
             </div>` : 
             ''}
-        <div id="activeFilters" class="active-filters"></div>
         <div id="filterBookmarks" class="filter-bookmarks"></div>
     `;
     
@@ -1062,20 +1066,102 @@ function updateFilterUI() {
     
     // Display active filters
     const activeFiltersDiv = document.getElementById('activeFilters');
-    activeFiltersDiv.innerHTML = '';
-    selectedFilters.forEach(filter => {
-        const filterTag = document.createElement('span');
-        filterTag.className = 'filter-tag';
-        filterTag.innerHTML = `
-            ${filter}
-            <button onclick="removeFilter('${filter}')">&times;</button>
-        `;
-        activeFiltersDiv.appendChild(filterTag);
-    });
+    if (activeFiltersDiv) {
+        activeFiltersDiv.innerHTML = '';
+        
+        if (selectedFilters.size > 0) {
+            // Add a label for active filters
+            const filtersLabel = document.createElement('div');
+            filtersLabel.className = 'active-filters-label';
+            filtersLabel.textContent = 'Active Filters:';
+            activeFiltersDiv.appendChild(filtersLabel);
+            
+            // Add each filter as a tag with remove button
+            selectedFilters.forEach(filter => {
+                const filterTag = document.createElement('span');
+                filterTag.className = 'filter-tag';
+                filterTag.innerHTML = `
+                    ${filter}
+                    <button onclick="removeFilter('${filter}')">&times;</button>
+                `;
+                activeFiltersDiv.appendChild(filterTag);
+            });
+        }
+    }
 
     // Update bookmarks list
     updateBookmarksList();
 }
+
+// Add additional styles for filter tags
+const additionalFilterStyles = document.createElement('style');
+additionalFilterStyles.textContent = `
+    .active-filters-container {
+        margin: 15px 0;
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+    }
+    
+    .active-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    
+    .active-filters-label {
+        width: 100%;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #555;
+    }
+    
+    .filter-tag {
+        background: #e0e0e0;
+        padding: 4px 8px;
+        border-radius: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 14px;
+    }
+    
+    .filter-tag button {
+        border: none;
+        background: none;
+        color: #666;
+        cursor: pointer;
+        padding: 0 4px;
+        font-size: 16px;
+        line-height: 1;
+    }
+    
+    .filter-tag button:hover {
+        color: #000;
+    }
+    
+    .bookmark-button-container {
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    .bookmark-button {
+        background: #2196F3;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    
+    .bookmark-button:hover {
+        background: #1976D2;
+    }
+`;
+document.head.appendChild(additionalFilterStyles);
 
 // Remove a filter
 function removeFilter(nodeId) {
@@ -2733,87 +2819,158 @@ function enhanceFormInputs() {
     }
 }
 
-// Updated filter section in HTML to fix duplicate heading
-function updateFilterUI() {
-    const filterSection = document.getElementById('filterSection');
-    filterSection.innerHTML = `
-        <div class="filter-input-group">
-            <input type="text" id="filterInput" placeholder="Enter node ID (e.g. 1a)">
-            <button onclick="addFilter()">Add Filter</button>
-            <button onclick="clearFilters()">Clear All</button>
-        </div>
-        ${selectedFilters.size > 0 ? 
-            `<div class="bookmark-button-container">
-                <button id="saveFilterBtn" class="bookmark-button">Save Filter Combination</button>
-            </div>` : 
-            ''}
-        <div id="activeFilters" class="active-filters"></div>
-        <div id="filterBookmarks" class="filter-bookmarks"></div>
-    `;
-    
-    // Re-attach event handler for the Save Filter button if it exists
-    const saveFilterBtn = document.getElementById('saveFilterBtn');
-    if (saveFilterBtn) {
-        saveFilterBtn.addEventListener('click', addFilterBookmark);
-    }
-    
-    // Re-attach event handler for the language toggle button to ensure it works after DOM changes
-    const langToggle = document.getElementById('langToggle');
-    if (langToggle) {
-        langToggle.onclick = toggleLanguage;
-    }
-    
-    // Display active filters
-    const activeFiltersDiv = document.getElementById('activeFilters');
-    activeFiltersDiv.innerHTML = '';
-    selectedFilters.forEach(filter => {
-        const filterTag = document.createElement('span');
-        filterTag.className = 'filter-tag';
-        filterTag.innerHTML = `
-            ${filter}
-            <button onclick="removeFilter('${filter}')">&times;</button>
-        `;
-        activeFiltersDiv.appendChild(filterTag);
-    });
+// ... existing code ...
 
-    // Update bookmarks list
-    updateBookmarksList();
+// Add these functions to handle form submissions
+function handleNoteSubmit(e) {
+    e.preventDefault();
+  
+    const id = document.getElementById("noteId").value;
+    const content = document.getElementById("noteContent").value;
+    const content_zh = document.getElementById("noteContentZh").value;
+    const parent_id = document.getElementById("noteParentId").value;
+
+    // Store recent inputs
+    addRecentInput('noteId', id);
+    addRecentInput('noteContent', content);
+    addRecentInput('noteContentZh', content_zh);
+    addRecentInput('noteParentId', parent_id);
+  
+    fetch(`${apiBase}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, content, content_zh, parent_id }),
+    }).then(() => {
+      alert("Note added!");
+      loadGraph();
+      loadNotesTable();
+      document.getElementById("noteForm").reset();
+    });
 }
 
-// Make sure our DOMContentLoaded handler runs enhanceFormInputs
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize interface and other components
-    initializeInterface();
-    enhanceFormInputs(); // This will add the missing "Add Note" button
-    
-    // Initialize existing autocomplete inputs
-    initializeAutocomplete('noteId');
-    initializeAutocomplete('noteContent');
-    initializeAutocomplete('noteContentZh');
-    initializeAutocomplete('noteParentId');
-    initializeAutocomplete('fromId');
-    initializeAutocomplete('toId');
-    initializeAutocomplete('linkDescription');
-    initializeAutocomplete('filterInput');
-    
-    // Ensure language toggle is properly set up
-    const langToggle = document.getElementById('langToggle');
-    if (langToggle) {
-        // Make sure text is correct
-        langToggle.textContent = currentLanguage === 'en' ? '切换到中文' : 'Switch to English';
+function handleLinkSubmit(e) {
+    e.preventDefault();
+  
+    const from_id = document.getElementById("fromId").value;
+    const to_id = document.getElementById("toId").value;
+    const description = document.getElementById("linkDescription").value;
+    const weight = parseFloat(document.getElementById("linkWeight").value) || 0;
+
+    // Store recent inputs
+    addRecentInput('fromId', from_id);
+    addRecentInput('toId', to_id);
+    addRecentInput('linkDescription', description);
+  
+    fetch(`${apiBase}/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from_id, to_id, description, weight }),
+    }).then(() => {
+      alert("Link added!");
+      loadGraph();
+      document.getElementById("linkForm").reset(); // Clear form
+    });
+}
+
+// Update the enhanceFormInputs function to properly handle form submissions
+function enhanceFormInputs() {
+    // Add styles for forms
+    const formStyle = document.createElement('style');
+    formStyle.textContent = `
+        form {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
         
-        // Explicitly set the onclick handler
-        langToggle.onclick = toggleLanguage;
-        console.log('Language toggle initialized');
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .form-group label {
+            font-weight: 500;
+            font-size: 14px;
+            color: #555;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+        
+        .input-error {
+            border-color: var(--error-color) !important;
+        }
+        
+        .error-message {
+            color: var(--error-color);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        
+        .input-with-icon {
+            position: relative;
+        }
+        
+        .clear-input {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #999;
+            padding: 0;
+            font-size: 16px;
+        }
+        
+        .clear-input:hover {
+            color: var(--error-color);
+        }
+    `;
+    document.head.appendChild(formStyle);
+    
+    // Note form handling - preserve the original form submission
+    const noteForm = document.getElementById('noteForm');
+    if (noteForm) {
+        // Remove any existing onsubmit handler to avoid duplicates
+        const oldSubmit = noteForm.onsubmit;
+        noteForm.onsubmit = null;
+        
+        // Add the event listener directly
+        noteForm.addEventListener('submit', handleNoteSubmit);
+        
+        // Make sure the form has a submit button
+        if (!noteForm.querySelector('button[type="submit"]')) {
+            const submitButton = document.createElement('button');
+            submitButton.type = 'submit';
+            submitButton.textContent = 'Add Note';
+            noteForm.appendChild(submitButton);
+        }
     }
     
-    // Load bookmarks
-    loadBookmarks();
-    
-    // Show the initial view
-    const lastActiveView = localStorage.getItem('lastActiveView') || 'table';
-    showView(lastActiveView);
-    
-    // Update filter UI to prevent duplicate heading
-    updateFilterUI();
-});
+    // Link form handling - preserve the original form submission
+    const linkForm = document.getElementById('linkForm');
+    if (linkForm) {
+        // Remove any existing onsubmit handler to avoid duplicates
+        const oldSubmit = linkForm.onsubmit;
+        linkForm.onsubmit = null;
+        
+        // Add the event listener directly
+        linkForm.addEventListener('submit', handleLinkSubmit);
+        
+        // Make sure the form has a submit button
+        if (!linkForm.querySelector('button[type="submit"]')) {
+            const submitButton = document.createElement('button');
+            submitButton.type = 'submit';
+            submitButton.textContent = 'Add Link';
+            linkForm.appendChild(submitButton);
+        }
+    }
+}
+
+// ... existing code ...
