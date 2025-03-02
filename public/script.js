@@ -2113,7 +2113,22 @@ function fixFormSubmissions() {
     }
 }
 
-// Update the applyModernUI function to call fixFormSubmissions
+// Function to remove all filter headings
+function removeAllFilterHeadings() {
+    // Find all filter headings
+    const filterHeadings = Array.from(document.querySelectorAll('h2')).filter(h2 => 
+        h2.textContent.trim() === 'Filter'
+    );
+    
+    // Remove all of them
+    filterHeadings.forEach(heading => {
+        if (heading && heading.parentNode) {
+            heading.parentNode.removeChild(heading);
+        }
+    });
+}
+
+// Update the applyModernUI function to call removeAllFilterHeadings
 function applyModernUI() {
     // Add modern UI base styles
     const modernStyles = document.createElement('style');
@@ -2478,6 +2493,9 @@ function applyModernUI() {
             fixFormSubmissions();
             addThemeCustomization();
             loadBookmarks();
+            
+            // Remove all filter headings
+            removeAllFilterHeadings();
         });
     } else {
         // Page already loaded
@@ -2498,6 +2516,9 @@ function applyModernUI() {
         // Fix form submissions
         fixFormSubmissions();
         addThemeCustomization();
+        
+        // Remove all filter headings
+        removeAllFilterHeadings();
     }
 }
 
@@ -2720,4 +2741,28 @@ function addThemeCustomization() {
         createThemeSettings();
     }
 }
+
+// Simple function to remove duplicate filter headings
+function removeDuplicateFilterHeadings() {
+    // Find all filter headings
+    const filterHeadings = Array.from(document.querySelectorAll('h2')).filter(h2 => 
+        h2.textContent.trim() === 'Filter'
+    );
+    
+    // Keep only the first one
+    if (filterHeadings.length > 1) {
+        for (let i = 1; i < filterHeadings.length; i++) {
+            if (filterHeadings[i] && filterHeadings[i].parentNode) {
+                filterHeadings[i].parentNode.removeChild(filterHeadings[i]);
+            }
+        }
+    }
+}
+
+// Also call it after updateFilterUI to ensure no duplicates are created
+const originalUpdateFilterUI = updateFilterUI;
+window.updateFilterUI = function() {
+    originalUpdateFilterUI();
+    removeDuplicateFilterHeadings();
+};
 
