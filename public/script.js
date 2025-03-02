@@ -20,7 +20,7 @@ const recentInputs = {
     filterInput: new Set()
 };
 
-const MAX_RECENT_ITEMS = 5; // defines the maximum number of recent entries to keep for each input field.
+const MAX_RECENT_ITEMS = 10; // defines the maximum number of recent entries to keep for each input field.
 
 // Add this helper function at the top of your script.js, checks if the application is running in an Electron environment.
 function isElectron() {
