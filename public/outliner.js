@@ -519,7 +519,7 @@ function renderOutliner(data) {
         }
     }
 
-    // Add a function to focus on a specific node
+    // Modify the focusOnNode function to only include the horizontal breadcrumb trail
     function focusOnNode(nodeId, allData) {
         // Find the selected node
         const selectedNode = allData.find(n => n.id === nodeId);
@@ -549,13 +549,60 @@ function renderOutliner(data) {
         
         addDescendants(nodeId, 0);
         
+        // Build the ancestor path for breadcrumbs
+        const ancestorPath = [];
+        let currentNode = selectedNode;
+        
+        // Add the current node first
+        ancestorPath.unshift({
+            id: currentNode.id,
+            content: currentNode.content
+        });
+        
+        // Then add all ancestors
+        while (currentNode.parent_id) {
+            const parentNode = allData.find(n => n.id === currentNode.parent_id);
+            if (!parentNode) break;
+            
+            ancestorPath.unshift({
+                id: parentNode.id,
+                content: parentNode.content
+            });
+            
+            currentNode = parentNode;
+        }
+        
         // Render the focused view
         renderOutliner(focusedData);
         
-        // Show a "breadcrumbs" navigation at the top
+        // Create and show the breadcrumb trail
+        const container = document.getElementById('outliner-content');
         const breadcrumbsEl = document.createElement('div');
         breadcrumbsEl.className = 'outliner-breadcrumbs';
-        breadcrumbsEl.innerHTML = `<span class="breadcrumb-label">Focused on:</span> <span class="breadcrumb-node">${selectedNode.content}</span>`;
+        
+        // Build the breadcrumb HTML
+        const breadcrumbsHTML = ancestorPath.map((node, index) => {
+            // For the last item (current focus node), don't make it clickable
+            if (index === ancestorPath.length - 1) {
+                return `<span class="breadcrumb-current">${node.content}</span>`;
+            }
+            
+            // For other ancestors, make them clickable to navigate
+            return `<a href="#" class="breadcrumb-link" data-node-id="${node.id}">${node.content}</a>`;
+        }).join('<span class="breadcrumb-separator">›</span>');
+        
+        breadcrumbsEl.innerHTML = breadcrumbsHTML;
+        
+        // Add click event listeners to breadcrumb links
+        breadcrumbsEl.querySelectorAll('.breadcrumb-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const ancestorId = link.dataset.nodeId;
+                focusOnNode(ancestorId, allData);
+            });
+        });
+        
+        // Insert breadcrumbs at the top
         container.insertBefore(breadcrumbsEl, container.firstChild);
     }
 
