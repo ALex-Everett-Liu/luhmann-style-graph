@@ -424,7 +424,7 @@ form button:hover {
     background: #1976d2;
 }
 
-/* Outliner styles */
+/* Updated Outliner styles */
 .outliner-content-wrapper {
   height: 700px;
   overflow-y: auto;
@@ -433,6 +433,8 @@ form button:hover {
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   margin-top: 10px;
+  display: flex;
+  flex-direction: column;
 }
 
 .outliner-header {
@@ -454,6 +456,12 @@ form button:hover {
   box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
 }
 
+.outliner-items-wrapper {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto; /* Center the outliner content */
+}
+
 .outliner-item {
   display: flex;
   align-items: center;
@@ -461,6 +469,12 @@ form button:hover {
   position: relative;
   font-size: 15px;
   line-height: 1.5;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+}
+
+.outliner-item:hover {
+  background-color: rgba(33, 150, 243, 0.05);
 }
 
 .outliner-toggle {
@@ -503,6 +517,10 @@ form button:hover {
   flex-grow: 1;
   cursor: pointer;
   margin-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 700px; /* Limit width to prevent extremely long content */
 }
 
 .outliner-content:hover {
@@ -534,25 +552,25 @@ form button:hover {
 }
 
 .outliner-controls {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .outliner-control-btn {
-    padding: 5px 10px;
-    background-color: #f5f5f5;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    transition: background-color 0.2s;
+  padding: 5px 10px;
+  background-color: #f5f5f5;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
 }
 
 .outliner-control-btn:hover {
-    background-color: #e0e0e0;
+  background-color: #e0e0e0;
 }
 
 /* Keyboard navigation styles */
@@ -607,4 +625,108 @@ tr.keyboard-focus {
 /* Add this to ensure the table doesn't lose focus styling on hover */
 tr.keyboard-focus:hover {
     background-color: rgba(33, 150, 243, 0.3) !important;
+}
+
+/* Bidirectional link styles for outliner */
+.outliner-links-toggle-container {
+  margin: 0;
+  padding: 0 0 0 48px;
+  position: relative;
+}
+
+.outliner-links-toggle {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin: 2px 0;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.outliner-links-toggle:hover {
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+.outliner-links-toggle.active {
+  background-color: rgba(33, 150, 243, 0.15);
+}
+
+.outliner-links-container {
+  padding: 0 0 0 48px;
+  margin: 0 0 8px 0;
+}
+
+.outliner-links-section {
+  margin-bottom: 10px;
+}
+
+.outliner-links-header {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  margin: 5px 0;
+}
+
+.outliner-links-section.outgoing .outliner-links-header {
+  color: var(--primary-color);
+}
+
+.outliner-links-section.incoming .outliner-links-header {
+  color: var(--accent-color);
+}
+
+.outliner-links-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.outliner-link-item {
+  padding: 2px 0;
+  margin: 2px 0;
+  font-size: 13px;
+}
+
+.outliner-link {
+  text-decoration: none;
+  color: var(--text-color);
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.outliner-link:hover {
+  background-color: rgba(33, 150, 243, 0.1);
+  text-decoration: underline;
+}
+
+.outliner-link-icon {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.outliner-link-item.outgoing .outliner-link-icon {
+  color: var(--primary-color);
+}
+
+.outliner-link-item.incoming .outliner-link-icon {
+  color: var(--accent-color);
+}
+
+.outliner-link-description {
+  font-size: 11px;
+  color: #888;
+  margin-left: 8px;
+  font-style: italic;
+}
+
+.outliner-highlight {
+  background-color: rgba(255, 235, 59, 0.3) !important;
+  transition: background-color 0.5s;
 }

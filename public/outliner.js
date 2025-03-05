@@ -1,5 +1,6 @@
 // Outliner Module for Zettelkasten System
 let outlinerData = null;
+let linkData = null; // Store link data for references
 
 // Function to load outliner data
 function loadOutliner() {
@@ -11,24 +12,30 @@ function loadOutliner() {
             parent_id: node.parent_id
         }));
         
+        // Use link data from filtered data
+        linkData = filteredData.links;
+        
         // Calculate proper depth for filtered data
         calculateDepthForFilteredData(hierarchyData);
         renderOutliner(hierarchyData);
         initializeOutlinerSearch(); // Initialize search after rendering
     } else {
-        // Add language parameter to the API call
-        fetch(`${apiBase}/hierarchy?lang=${currentLanguage}`)
-            .then(response => response.json())
-            .then(hierarchyData => {
-                console.log("Fetched hierarchy data for outliner:", hierarchyData);
-                outlinerData = hierarchyData;
-                renderOutliner(hierarchyData);
-                initializeOutlinerSearch(); // Initialize search after rendering
-            })
-            .catch(error => {
-                console.error("Error loading outliner data:", error);
-                clientLogger.error("Failed to load outliner data", { error });
-            });
+        // Load both hierarchy and graph data to get links
+        Promise.all([
+            fetch(`${apiBase}/hierarchy?lang=${currentLanguage}`).then(response => response.json()),
+            fetch(`${apiBase}/graph?lang=${currentLanguage}`).then(response => response.json())
+        ])
+        .then(([hierarchyData, graphData]) => {
+            console.log("Fetched hierarchy data for outliner:", hierarchyData);
+            outlinerData = hierarchyData;
+            linkData = graphData.links;
+            renderOutliner(hierarchyData);
+            initializeOutlinerSearch(); // Initialize search after rendering
+        })
+        .catch(error => {
+            console.error("Error loading outliner data:", error);
+            clientLogger.error("Failed to load outliner data", { error });
+        });
     }
 }
 
@@ -129,12 +136,19 @@ function renderOutliner(data) {
         node.expanded = true;
     });
 
+    // Create a wrapper for the outliner items to allow for better positioning
+    const outlinerItemsWrapper = document.createElement('div');
+    outlinerItemsWrapper.className = 'outliner-items-wrapper';
+    container.appendChild(outlinerItemsWrapper);
+
     // Function to recursively render a node and its children
     function renderNode(node, container) {
         const itemEl = document.createElement('div');
         itemEl.className = 'outliner-item';
         itemEl.dataset.nodeId = node.id;
-        itemEl.style.paddingLeft = `${node.depth * 20}px`;
+        
+        // Adjust padding to center the content better
+        itemEl.style.paddingLeft = `${node.depth * 20 + 10}px`;
 
         // Create toggle button if node has children
         if (node.children && node.children.length > 0) {
@@ -200,6 +214,12 @@ function renderOutliner(data) {
         
         container.appendChild(itemEl);
 
+        // Add links section with toggle
+        if (linkData && linkData.length > 0) {
+            const linksContainer = addLinksSection(node.id, itemEl);
+            container.appendChild(linksContainer);
+        }
+
         // Recursively render children if expanded
         if (node.children && node.children.length > 0) {
             const childrenContainer = document.createElement('div');
@@ -214,9 +234,189 @@ function renderOutliner(data) {
         }
     }
 
+    // Function to add links section for a node
+    function addLinksSection(nodeId, parentEl) {
+        // Filter links for this node
+        const outgoingLinks = linkData.filter(link => link.source === nodeId);
+        const incomingLinks = linkData.filter(link => link.target === nodeId);
+        
+        // Create container only if there are links
+        if (outgoingLinks.length === 0 && incomingLinks.length === 0) {
+            return document.createDocumentFragment(); // Return empty fragment if no links
+        }
+        
+        const linksContainer = document.createElement('div');
+        linksContainer.className = 'outliner-links-container';
+        linksContainer.style.paddingLeft = parentEl.style.paddingLeft;
+        linksContainer.style.display = 'none'; // Hidden by default
+        
+        // Create toggle button for links
+        const linksToggleBtn = document.createElement('button');
+        linksToggleBtn.className = 'outliner-links-toggle';
+        linksToggleBtn.textContent = `Links (${outgoingLinks.length + incomingLinks.length})`;
+        linksToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = linksContainer.style.display === 'block';
+            linksContainer.style.display = isVisible ? 'none' : 'block';
+            linksToggleBtn.classList.toggle('active');
+        });
+        
+        // Add links toggle button to parent
+        const linksToggleContainer = document.createElement('div');
+        linksToggleContainer.className = 'outliner-links-toggle-container';
+        linksToggleContainer.style.paddingLeft = parentEl.style.paddingLeft;
+        linksToggleContainer.appendChild(linksToggleBtn);
+        
+        // Add outgoing links
+        if (outgoingLinks.length > 0) {
+            const outgoingSection = document.createElement('div');
+            outgoingSection.className = 'outliner-links-section outgoing';
+            
+            const outgoingHeader = document.createElement('div');
+            outgoingHeader.className = 'outliner-links-header';
+            outgoingHeader.textContent = 'Links';
+            outgoingSection.appendChild(outgoingHeader);
+            
+            const outgoingList = document.createElement('ul');
+            outgoingList.className = 'outliner-links-list';
+            
+            outgoingLinks.forEach(link => {
+                const linkItem = createLinkItem(link.target, link.description, 'outgoing');
+                outgoingList.appendChild(linkItem);
+            });
+            
+            outgoingSection.appendChild(outgoingList);
+            linksContainer.appendChild(outgoingSection);
+        }
+        
+        // Add incoming links (backlinks)
+        if (incomingLinks.length > 0) {
+            const incomingSection = document.createElement('div');
+            incomingSection.className = 'outliner-links-section incoming';
+            
+            const incomingHeader = document.createElement('div');
+            incomingHeader.className = 'outliner-links-header';
+            incomingHeader.textContent = 'Backlinks';
+            incomingSection.appendChild(incomingHeader);
+            
+            const incomingList = document.createElement('ul');
+            incomingList.className = 'outliner-links-list';
+            
+            incomingLinks.forEach(link => {
+                const linkItem = createLinkItem(link.source, link.description, 'incoming');
+                incomingList.appendChild(linkItem);
+            });
+            
+            incomingSection.appendChild(incomingList);
+            linksContainer.appendChild(incomingSection);
+        }
+        
+        // Insert toggle button after parent element
+        parentEl.after(linksToggleContainer);
+        
+        return linksContainer;
+    }
+
+    // Function to create a link item
+    function createLinkItem(nodeId, description, linkType) {
+        const item = document.createElement('li');
+        item.className = `outliner-link-item ${linkType}`;
+        
+        // Find the node content
+        const targetNode = data.find(n => n.id === nodeId);
+        const nodeContent = targetNode ? targetNode.content : `Node ${nodeId}`;
+        
+        // Create link element
+        const linkEl = document.createElement('a');
+        linkEl.className = 'outliner-link';
+        linkEl.href = '#';
+        linkEl.innerHTML = `<span class="outliner-link-icon">${linkType === 'outgoing' ? '→' : '←'}</span> ${nodeContent}`;
+        linkEl.title = description || `${linkType === 'outgoing' ? 'Link to' : 'Referenced by'} ${nodeId}`;
+        
+        // Add click event to navigate to the linked node
+        linkEl.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Find the target node element and scroll to it
+            const targetElement = document.querySelector(`.outliner-item[data-node-id="${nodeId}"]`);
+            if (targetElement) {
+                // Ensure all parent containers are expanded
+                expandParentsOf(nodeId);
+                
+                // Scroll to the target element
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Highlight the target element briefly
+                targetElement.classList.add('outliner-highlight');
+                setTimeout(() => {
+                    targetElement.classList.remove('outliner-highlight');
+                }, 2000);
+            } else {
+                console.log(`Node ${nodeId} not found in the current view`);
+            }
+        });
+        
+        item.appendChild(linkEl);
+        
+        // Add description if available
+        if (description) {
+            const descEl = document.createElement('span');
+            descEl.className = 'outliner-link-description';
+            descEl.textContent = description;
+            item.appendChild(descEl);
+        }
+        
+        return item;
+    }
+
+    // Function to expand all parent containers of a node
+    function expandParentsOf(nodeId) {
+        // Find the node in the data
+        const findParentPath = (id, nodes) => {
+            for (const node of nodes) {
+                if (node.id === id) {
+                    return [node.id];
+                }
+                if (node.children && node.children.length > 0) {
+                    const path = findParentPath(id, node.children);
+                    if (path) {
+                        return [node.id, ...path];
+                    }
+                }
+            }
+            return null;
+        };
+        
+        // Get the path from root to the target node
+        const rootNodes = data.filter(node => !node.parent_id);
+        let parentPath = null;
+        
+        for (const root of rootNodes) {
+            const path = findParentPath(nodeId, [root]);
+            if (path) {
+                parentPath = path;
+                break;
+            }
+        }
+        
+        if (!parentPath) return;
+        
+        // Expand all nodes in the path
+        for (let i = 0; i < parentPath.length - 1; i++) {
+            const parentId = parentPath[i];
+            const parentEl = document.querySelector(`.outliner-item[data-node-id="${parentId}"]`);
+            if (parentEl) {
+                const toggleEl = parentEl.querySelector('.outliner-toggle');
+                if (toggleEl && toggleEl.classList.contains('collapsed')) {
+                    toggleEl.click(); // Simulate click to expand
+                }
+            }
+        }
+    }
+
     // Render all root nodes
     rootNodes.forEach(rootNode => {
-        renderNode(rootNode, container);
+        renderNode(rootNode, outlinerItemsWrapper);
     });
 
     // Function to expand or collapse all nodes
