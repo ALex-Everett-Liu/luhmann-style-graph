@@ -517,10 +517,11 @@ form button:hover {
   flex-grow: 1;
   cursor: pointer;
   margin-right: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 700px; /* Limit width to prevent extremely long content */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+  max-width: none;
+  word-break: break-word;
 }
 
 .outliner-content:hover {
@@ -541,7 +542,7 @@ form button:hover {
 }
 
 .outliner-children {
-  margin-left: 0; /* No additional margin as we're using paddingLeft on items */
+  margin-left: 0;
 }
 
 .empty-state {
@@ -630,7 +631,7 @@ tr.keyboard-focus:hover {
 /* Improved Bidirectional link styles for outliner */
 .outliner-links-toggle-container {
   margin: 2px 0;
-  padding-left: 20px; /* Reduce left padding to align better with content */
+  padding-left: 20px;
   position: relative;
   display: flex;
   align-items: center;
@@ -657,7 +658,7 @@ tr.keyboard-focus:hover {
 }
 
 .outliner-links-container {
-  padding-left: 40px; /* Align with content */
+  padding-left: 40px;
   margin: 4px 0 8px 0;
   border-left: 2px solid rgba(33, 150, 243, 0.2);
 }
@@ -739,4 +740,107 @@ tr.keyboard-focus:hover {
 .outliner-highlight {
   background-color: rgba(255, 235, 59, 0.3) !important;
   transition: background-color 0.5s;
+}
+
+/* Depth pagination styles for outliner */
+.outliner-depth-controls {
+  display: flex;
+  align-items: center;
+  margin-left: 20px;
+  padding: 0 10px;
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+}
+
+.outliner-depth-btn {
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.outliner-depth-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.outliner-depth-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.outliner-depth-indicator {
+  margin: 0 10px;
+  font-size: 12px;
+  color: #666;
+  min-width: 80px;
+  text-align: center;
+}
+
+.outliner-focus-btn {
+  margin-left: 10px;
+  background-color: #fff;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.outliner-focus-btn:hover {
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+.outliner-focus-node-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 14px;
+  padding: 0;
+  margin-right: 4px;
+  cursor: pointer;
+  display: none;
+}
+
+.outliner-item:hover .outliner-focus-node-btn {
+  display: inline-block;
+}
+
+.outliner-breadcrumbs {
+  margin-bottom: 15px;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.breadcrumb-label {
+  color: #666;
+  margin-right: 8px;
+}
+
+.breadcrumb-node {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.outliner-more-items {
+  margin-left: 40px;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  transition: background-color 0.2s;
+}
+
+.outliner-more-items:hover {
+  background-color: #e0e0e0;
+  color: var(--primary-color);
 }

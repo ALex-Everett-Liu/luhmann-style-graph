@@ -1,6 +1,8 @@
 // Outliner Module for Zettelkasten System
 let outlinerData = null;
 let linkData = null; // Store link data for references
+let currentDepthPage = 0;
+const depthPerPage = 4; // Show 4 levels per page
 
 // Function to load outliner data
 function loadOutliner() {
@@ -26,16 +28,16 @@ function loadOutliner() {
             fetch(`${apiBase}/graph?lang=${currentLanguage}`).then(response => response.json())
         ])
         .then(([hierarchyData, graphData]) => {
-            console.log("Fetched hierarchy data for outliner:", hierarchyData);
-            outlinerData = hierarchyData;
+                console.log("Fetched hierarchy data for outliner:", hierarchyData);
+                outlinerData = hierarchyData;
             linkData = graphData.links;
-            renderOutliner(hierarchyData);
-            initializeOutlinerSearch(); // Initialize search after rendering
-        })
-        .catch(error => {
-            console.error("Error loading outliner data:", error);
-            clientLogger.error("Failed to load outliner data", { error });
-        });
+                renderOutliner(hierarchyData);
+                initializeOutlinerSearch(); // Initialize search after rendering
+            })
+            .catch(error => {
+                console.error("Error loading outliner data:", error);
+                clientLogger.error("Failed to load outliner data", { error });
+            });
     }
 }
 
@@ -81,10 +83,11 @@ function renderOutliner(data) {
         return;
     }
 
-    // Add expand/collapse all buttons
+    // Add controls section with expand/collapse and pagination
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'outliner-controls';
     
+    // Add expand/collapse buttons
     const expandAllBtn = document.createElement('button');
     expandAllBtn.className = 'outliner-control-btn';
     expandAllBtn.textContent = 'Expand All';
@@ -99,8 +102,60 @@ function renderOutliner(data) {
         expandCollapseAll(false);
     });
     
+    // Add depth pagination controls
+    const depthControlsDiv = document.createElement('div');
+    depthControlsDiv.className = 'outliner-depth-controls';
+    
+    const prevDepthBtn = document.createElement('button');
+    prevDepthBtn.className = 'outliner-depth-btn';
+    prevDepthBtn.innerHTML = '&laquo; Shallower';
+    prevDepthBtn.disabled = currentDepthPage === 0;
+    prevDepthBtn.addEventListener('click', () => {
+        if (currentDepthPage > 0) {
+            currentDepthPage--;
+            renderOutliner(data);
+        }
+    });
+    
+    const depthIndicator = document.createElement('span');
+    depthIndicator.className = 'outliner-depth-indicator';
+    const startDepth = currentDepthPage * depthPerPage;
+    const endDepth = startDepth + depthPerPage - 1;
+    depthIndicator.textContent = `Levels ${startDepth} - ${endDepth}`;
+    
+    const nextDepthBtn = document.createElement('button');
+    nextDepthBtn.className = 'outliner-depth-btn';
+    nextDepthBtn.innerHTML = 'Deeper &raquo;';
+    
+    // Find the maximum depth in the data
+    const maxDepth = Math.max(...data.map(node => node.depth || 0));
+    nextDepthBtn.disabled = (currentDepthPage + 1) * depthPerPage > maxDepth;
+    
+    nextDepthBtn.addEventListener('click', () => {
+        currentDepthPage++;
+        renderOutliner(data);
+    });
+    
+    // Add focus mode button
+    const resetFocusBtn = document.createElement('button');
+    resetFocusBtn.className = 'outliner-focus-btn';
+    resetFocusBtn.textContent = 'Reset Focus';
+    resetFocusBtn.addEventListener('click', () => {
+        // Reset any focus state and render the full hierarchy
+        currentDepthPage = 0;
+        renderOutliner(data);
+    });
+    
+    // Assemble controls
+    depthControlsDiv.appendChild(prevDepthBtn);
+    depthControlsDiv.appendChild(depthIndicator);
+    depthControlsDiv.appendChild(nextDepthBtn);
+    
     controlsDiv.appendChild(expandAllBtn);
     controlsDiv.appendChild(collapseAllBtn);
+    controlsDiv.appendChild(depthControlsDiv);
+    controlsDiv.appendChild(resetFocusBtn);
+    
     container.appendChild(controlsDiv);
 
     // Build a tree structure from flat data
@@ -136,19 +191,42 @@ function renderOutliner(data) {
         node.expanded = true;
     });
 
-    // Create a wrapper for the outliner items to allow for better positioning
+    // Create a wrapper for the outliner items
     const outlinerItemsWrapper = document.createElement('div');
     outlinerItemsWrapper.className = 'outliner-items-wrapper';
     container.appendChild(outlinerItemsWrapper);
 
-    // Function to recursively render a node and its children
+    // Modify the renderNode function to respect depth pagination
     function renderNode(node, container) {
+        // Skip nodes that don't belong on the current depth page
+        const minDepth = currentDepthPage * depthPerPage;
+        const maxDepth = minDepth + depthPerPage - 1;
+        
+        if (node.depth < minDepth || node.depth > maxDepth) {
+            return;
+        }
+
         const itemEl = document.createElement('div');
         itemEl.className = 'outliner-item';
         itemEl.dataset.nodeId = node.id;
         
-        // Adjust padding to center the content better
-        itemEl.style.paddingLeft = `${node.depth * 20 + 10}px`;
+        // Adjust padding based on relative depth within the current page
+        const relativeDepth = node.depth - minDepth;
+        itemEl.style.paddingLeft = `${relativeDepth * 20 + 10}px`;
+
+        // Add focus button for nodes that have children
+        if (node.children && node.children.length > 0) {
+            const focusBtn = document.createElement('button');
+            focusBtn.className = 'outliner-focus-node-btn';
+            focusBtn.innerHTML = '⊕';
+            focusBtn.title = 'Focus on this branch';
+            focusBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Implement focus functionality
+                focusOnNode(node.id, data);
+            });
+            itemEl.appendChild(focusBtn);
+        }
 
         // Create toggle button if node has children
         if (node.children && node.children.length > 0) {
@@ -220,17 +298,32 @@ function renderOutliner(data) {
             container.appendChild(linksContainer);
         }
 
-        // Recursively render children if expanded
-        if (node.children && node.children.length > 0) {
+        // Recursively render children if expanded and on this depth page
+        if (node.children && node.children.length > 0 && node.expanded) {
             const childrenContainer = document.createElement('div');
             childrenContainer.className = 'outliner-children';
-            childrenContainer.style.display = node.expanded ? 'block' : 'none';
             
+            // Check if any children are in the visible depth range
+            const hasVisibleChildren = node.children.some(
+                child => child.depth >= minDepth && child.depth <= maxDepth
+            );
+            
+            if (hasVisibleChildren) {
             node.children.forEach(child => {
                 renderNode(child, childrenContainer);
             });
-            
-            container.appendChild(childrenContainer);
+                container.appendChild(childrenContainer);
+            } else if (node.depth === maxDepth && node.children.length > 0) {
+                // Show a "more items" indicator for nodes at the max depth that have children
+                const moreItemsEl = document.createElement('div');
+                moreItemsEl.className = 'outliner-more-items';
+                moreItemsEl.textContent = `+ ${node.children.length} more items (next page)`;
+                moreItemsEl.addEventListener('click', () => {
+                    currentDepthPage++;
+                    renderOutliner(data);
+                });
+                container.appendChild(moreItemsEl);
+            }
         }
     }
 
@@ -426,7 +519,47 @@ function renderOutliner(data) {
         }
     }
 
-    // Render all root nodes
+    // Add a function to focus on a specific node
+    function focusOnNode(nodeId, allData) {
+        // Find the selected node
+        const selectedNode = allData.find(n => n.id === nodeId);
+        if (!selectedNode) return;
+        
+        // Reset depth pagination to show from the top level
+        currentDepthPage = 0;
+        
+        // Create a new focused dataset starting with the selected node
+        const focusedData = [
+            { ...selectedNode, depth: 0, parent_id: null }
+        ];
+        
+        // Add all descendants with adjusted depths
+        const addDescendants = (parentId, parentDepth) => {
+            const children = allData.filter(n => n.parent_id === parentId);
+            children.forEach(child => {
+                const adjustedChild = {
+                    ...child,
+                    depth: parentDepth + 1,
+                    parent_id: parentId
+                };
+                focusedData.push(adjustedChild);
+                addDescendants(child.id, adjustedChild.depth);
+            });
+        };
+        
+        addDescendants(nodeId, 0);
+        
+        // Render the focused view
+        renderOutliner(focusedData);
+        
+        // Show a "breadcrumbs" navigation at the top
+        const breadcrumbsEl = document.createElement('div');
+        breadcrumbsEl.className = 'outliner-breadcrumbs';
+        breadcrumbsEl.innerHTML = `<span class="breadcrumb-label">Focused on:</span> <span class="breadcrumb-node">${selectedNode.content}</span>`;
+        container.insertBefore(breadcrumbsEl, container.firstChild);
+    }
+
+    // Render only root nodes that are within the current depth page
     rootNodes.forEach(rootNode => {
         renderNode(rootNode, outlinerItemsWrapper);
     });
