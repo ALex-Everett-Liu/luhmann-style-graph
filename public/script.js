@@ -561,8 +561,7 @@ function showView(viewName) {
             if (viewElement) {
                 viewElement.style.display = 'block';
                 viewElement.classList.add('active');
-                // Use the module function instead
-                window.outlinerModule.loadOutliner();
+                window.outlinerModule.showOutlinerView(); // Use the new function
             }
             break;
         case 'terminal':

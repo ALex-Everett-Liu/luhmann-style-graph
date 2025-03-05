@@ -14,6 +14,7 @@ function loadOutliner() {
         // Calculate proper depth for filtered data
         calculateDepthForFilteredData(hierarchyData);
         renderOutliner(hierarchyData);
+        initializeOutlinerSearch(); // Initialize search after rendering
     } else {
         // Add language parameter to the API call
         fetch(`${apiBase}/hierarchy?lang=${currentLanguage}`)
@@ -22,6 +23,7 @@ function loadOutliner() {
                 console.log("Fetched hierarchy data for outliner:", hierarchyData);
                 outlinerData = hierarchyData;
                 renderOutliner(hierarchyData);
+                initializeOutlinerSearch(); // Initialize search after rendering
             })
             .catch(error => {
                 console.error("Error loading outliner data:", error);
@@ -72,6 +74,28 @@ function renderOutliner(data) {
         return;
     }
 
+    // Add expand/collapse all buttons
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'outliner-controls';
+    
+    const expandAllBtn = document.createElement('button');
+    expandAllBtn.className = 'outliner-control-btn';
+    expandAllBtn.textContent = 'Expand All';
+    expandAllBtn.addEventListener('click', () => {
+        expandCollapseAll(true);
+    });
+    
+    const collapseAllBtn = document.createElement('button');
+    collapseAllBtn.className = 'outliner-control-btn';
+    collapseAllBtn.textContent = 'Collapse All';
+    collapseAllBtn.addEventListener('click', () => {
+        expandCollapseAll(false);
+    });
+    
+    controlsDiv.appendChild(expandAllBtn);
+    controlsDiv.appendChild(collapseAllBtn);
+    container.appendChild(controlsDiv);
+
     // Build a tree structure from flat data
     const idToNodeMap = new Map();
     const rootNodes = [];
@@ -84,7 +108,7 @@ function renderOutliner(data) {
             parent_id: item.parent_id,
             children: [],
             depth: item.depth || 0,
-            expanded: true // Start with all nodes expanded
+            expanded: false // Start with all nodes collapsed by default
         };
         idToNodeMap.set(node.id, node);
     });
@@ -98,6 +122,11 @@ function renderOutliner(data) {
         } else {
             rootNodes.push(node);
         }
+    });
+
+    // Make root nodes expanded by default
+    rootNodes.forEach(node => {
+        node.expanded = true;
     });
 
     // Function to recursively render a node and its children
@@ -190,6 +219,20 @@ function renderOutliner(data) {
         renderNode(rootNode, container);
     });
 
+    // Function to expand or collapse all nodes
+    function expandCollapseAll(expand) {
+        // Update all toggle buttons
+        document.querySelectorAll('.outliner-toggle').forEach(toggle => {
+            toggle.innerHTML = expand ? '▼' : '▶';
+            toggle.className = `outliner-toggle ${expand ? 'expanded' : 'collapsed'}`;
+        });
+        
+        // Update all children containers
+        document.querySelectorAll('.outliner-children').forEach(container => {
+            container.style.display = expand ? 'block' : 'none';
+        });
+    }
+
     // Add the search functionality
     applyOutlinerSearch();
 }
@@ -235,7 +278,7 @@ function applyOutlinerSearch() {
     // When searching, first hide all items
     items.forEach(item => {
         const content = item.querySelector('.outliner-content').textContent.toLowerCase();
-        const id = item.querySelector('.outliner-id').textContent.toLowerCase();
+        const id = item.dataset.nodeId.toLowerCase(); // Use dataset instead of looking for the ID element
         
         if (content.includes(searchTerm) || id.includes(searchTerm)) {
             item.style.display = 'flex';
@@ -245,6 +288,16 @@ function applyOutlinerSearch() {
             while (parent && !parent.classList.contains('outliner-content-wrapper')) {
                 if (parent.classList.contains('outliner-children')) {
                     parent.style.display = 'block';
+                    
+                    // Also make sure the parent item's toggle is set to expanded
+                    const parentItem = parent.previousElementSibling;
+                    if (parentItem) {
+                        const toggle = parentItem.querySelector('.outliner-toggle');
+                        if (toggle) {
+                            toggle.innerHTML = '▼';
+                            toggle.className = 'outliner-toggle expanded';
+                        }
+                    }
                 }
                 parent = parent.parentElement;
             }
@@ -252,6 +305,8 @@ function applyOutlinerSearch() {
             item.style.display = 'none';
         }
     });
+    
+    console.log(`Search applied with term: "${searchTerm}"`);
 }
 
 // Function to update outliner when filter changes
@@ -261,11 +316,19 @@ function updateOutlinerWithFilter() {
     }
 }
 
+// Also make sure to call initializeOutlinerSearch when showing the outliner view
+function showOutlinerView() {
+    document.getElementById('outliner-container').style.display = 'block';
+    loadOutliner();
+    initializeOutlinerSearch();
+}
+
 // Export the functions to be used in the main script
 window.outlinerModule = {
     loadOutliner,
     renderOutliner,
     initializeOutlinerSearch,
     applyOutlinerSearch,
-    updateOutlinerWithFilter
+    updateOutlinerWithFilter,
+    showOutlinerView
 }; 
