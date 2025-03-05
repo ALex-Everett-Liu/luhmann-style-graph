@@ -1242,6 +1242,15 @@ document.addEventListener('DOMContentLoaded', () => {
     window.outlinerModule.initializeOutlinerSearch();
 
     keyboardManager.init();
+    
+    // Add keyboard shortcuts help button
+    const helpButton = document.createElement('button');
+    helpButton.textContent = 'Keyboard Shortcuts';
+    helpButton.className = 'keyboard-help-button';
+    helpButton.addEventListener('click', () => keyboardManager.showKeyboardShortcutsHelp());
+    
+    // Add to view controls
+    document.querySelector('.view-controls').appendChild(helpButton);
 });
 
 // Update the countNonTreeLinks function to be more explicit
@@ -2730,6 +2739,41 @@ const keyboardManager = {
                     toggleLanguage();
                     event.preventDefault();
                     return true;
+                // Add shortcuts for note form fields
+                case 'i':
+                    // Focus note ID field
+                    document.getElementById('noteId').focus();
+                    event.preventDefault();
+                    return true;
+                case 'e':
+                    // Focus English content field
+                    document.getElementById('noteContent').focus();
+                    event.preventDefault();
+                    return true;
+                case 'c':
+                    // Focus Chinese content field
+                    document.getElementById('noteContentZh').focus();
+                    event.preventDefault();
+                    return true;
+                case 'p':
+                    // Focus parent ID field
+                    document.getElementById('noteParentId').focus();
+                    event.preventDefault();
+                    return true;
+                case 'a':
+                    // Submit note form
+                    if (!event.target.closest('input, textarea')) {
+                        document.getElementById('noteForm').dispatchEvent(new Event('submit'));
+                        event.preventDefault();
+                        return true;
+                    }
+                    break;
+                case '?':
+                case '/':
+                    // Show keyboard shortcuts help
+                    this.showKeyboardShortcutsHelp();
+                    event.preventDefault();
+                    return true;
             }
         }
         
@@ -2744,6 +2788,32 @@ const keyboardManager = {
                 case 'l':
                     // Focus new link form
                     document.getElementById('fromId').focus();
+                    event.preventDefault();
+                    return true;
+                // Add Alt shortcuts for note form fields
+                case 'i':
+                    // Focus note ID field
+                    document.getElementById('noteId').focus();
+                    event.preventDefault();
+                    return true;
+                case 'e':
+                    // Focus English content field
+                    document.getElementById('noteContent').focus();
+                    event.preventDefault();
+                    return true;
+                case 'c':
+                    // Focus Chinese content field
+                    document.getElementById('noteContentZh').focus();
+                    event.preventDefault();
+                    return true;
+                case 'p':
+                    // Focus parent ID field
+                    document.getElementById('noteParentId').focus();
+                    event.preventDefault();
+                    return true;
+                case 'a':
+                    // Submit note form
+                    document.getElementById('noteForm').dispatchEvent(new Event('submit'));
                     event.preventDefault();
                     return true;
             }
@@ -2823,6 +2893,28 @@ const keyboardManager = {
             this.resetCommandBuffer();
         } else if (cmd === 'L') {
             toggleLanguage();
+            this.resetCommandBuffer();
+        }
+        
+        // Note form commands
+        else if (cmd === 'ni') {
+            document.getElementById('noteId').focus();
+            this.resetCommandBuffer();
+            this.toggleVimMode(); // Exit vim mode when focusing an input
+        } else if (cmd === 'ne') {
+            document.getElementById('noteContent').focus();
+            this.resetCommandBuffer();
+            this.toggleVimMode(); // Exit vim mode when focusing an input
+        } else if (cmd === 'nc') {
+            document.getElementById('noteContentZh').focus();
+            this.resetCommandBuffer();
+            this.toggleVimMode(); // Exit vim mode when focusing an input
+        } else if (cmd === 'np') {
+            document.getElementById('noteParentId').focus();
+            this.resetCommandBuffer();
+            this.toggleVimMode(); // Exit vim mode when focusing an input
+        } else if (cmd === 'na') {
+            document.getElementById('noteForm').dispatchEvent(new Event('submit'));
             this.resetCommandBuffer();
         }
         
@@ -2970,7 +3062,83 @@ const keyboardManager = {
                 handleMarkdownClick(nodeId);
             }
         }
-    }
+    },
+    
+    showKeyboardShortcutsHelp() {
+        const helpContent = `
+        <h2>Keyboard Shortcuts</h2>
+        
+        <h3>Global Shortcuts</h3>
+        <ul>
+            <li><kbd>Escape</kbd>: Toggle Vim navigation mode</li>
+            <li><kbd>Ctrl/Cmd + 1</kbd>: Switch to Table View</li>
+            <li><kbd>Ctrl/Cmd + 2</kbd>: Switch to Graph View</li>
+            <li><kbd>Ctrl/Cmd + 3</kbd>: Switch to Mind Map View</li>
+            <li><kbd>Ctrl/Cmd + 4</kbd>: Switch to Outliner View</li>
+            <li><kbd>Ctrl/Cmd + 5</kbd>: Switch to Terminal View</li>
+            <li><kbd>Ctrl/Cmd + F</kbd>: Focus filter input</li>
+            <li><kbd>Ctrl/Cmd + S</kbd>: Save markdown when editing</li>
+            <li><kbd>Ctrl/Cmd + L</kbd>: Toggle language</li>
+        </ul>
+        
+        <h3>Note Form Shortcuts</h3>
+        <ul>
+            <li><kbd>Ctrl/Cmd + I</kbd> or <kbd>Alt + I</kbd>: Focus Note ID field</li>
+            <li><kbd>Ctrl/Cmd + E</kbd> or <kbd>Alt + E</kbd>: Focus English content field</li>
+            <li><kbd>Ctrl/Cmd + C</kbd> or <kbd>Alt + C</kbd>: Focus Chinese content field</li>
+            <li><kbd>Ctrl/Cmd + P</kbd> or <kbd>Alt + P</kbd>: Focus Parent ID field</li>
+            <li><kbd>Ctrl/Cmd + A</kbd> or <kbd>Alt + A</kbd>: Submit note form</li>
+        </ul>
+        
+        <h3>Vim Mode Commands</h3>
+        <ul>
+            <li><kbd>j</kbd>: Navigate down in table</li>
+            <li><kbd>k</kbd>: Navigate up in table</li>
+            <li><kbd>gg</kbd>: Go to top of table</li>
+            <li><kbd>G</kbd>: Go to bottom of table</li>
+            <li><kbd>h</kbd>: Navigate left (in graph/mind map views)</li>
+            <li><kbd>l</kbd>: Navigate right (in graph/mind map views)</li>
+            <li><kbd>vt</kbd>: Switch to Table View</li>
+            <li><kbd>vg</kbd>: Switch to Graph View</li>
+            <li><kbd>vm</kbd>: Switch to Mind Map View</li>
+            <li><kbd>vo</kbd>: Switch to Outliner View</li>
+            <li><kbd>vx</kbd>: Switch to Terminal View</li>
+            <li><kbd>e</kbd>: Edit focused node (open markdown editor)</li>
+            <li><kbd>f</kbd>: Focus filter input</li>
+            <li><kbd>af</kbd>: Apply filter</li>
+            <li><kbd>cf</kbd>: Clear filter</li>
+            <li><kbd>L</kbd>: Toggle language</li>
+            <li><kbd>ni</kbd>: Focus Note ID field</li>
+            <li><kbd>ne</kbd>: Focus English content field</li>
+            <li><kbd>nc</kbd>: Focus Chinese content field</li>
+            <li><kbd>np</kbd>: Focus Parent ID field</li>
+            <li><kbd>na</kbd>: Submit note form</li>
+        </ul>
+        `;
+        
+        // Create modal for displaying shortcuts
+        const modal = document.createElement('div');
+        modal.className = 'markdown-modal';
+        modal.innerHTML = `
+            <div class="markdown-modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+                ${helpContent}
+                <div class="markdown-modal-buttons">
+                    <button onclick="document.querySelector('.markdown-modal').remove()">Close</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Add event listener to close on Escape
+        const closeOnEscape = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', closeOnEscape);
+            }
+        };
+        document.addEventListener('keydown', closeOnEscape);
+    },
 };
 
 

@@ -225,4 +225,7 @@ const themeModule = (function() {
 })();
 
 // Export the module
-window.themeModule = themeModule; 
+window.themeModule = themeModule;
+
+// Initialize the theme module when the script loads
+themeModule.initialize(); 
