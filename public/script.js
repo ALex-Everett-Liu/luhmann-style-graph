@@ -2783,3 +2783,43 @@ window.updateFilterUI = function() {
     removeDuplicateFilterHeadings();
 };
 
+// Load a bookmark
+function loadBookmark(name) {
+    const bookmark = filterBookmarks.get(name);
+    if (bookmark) {
+        selectedFilters = new Set(bookmark.filters);
+        updateFilterUI();
+        
+        // Apply the first filter to get data
+        if (selectedFilters.size > 0) {
+            const firstFilter = Array.from(selectedFilters)[0];
+            fetch(`${apiBase}/filter?id=${firstFilter}&lang=${currentLanguage}`)
+                .then(response => response.json())
+                .then(data => {
+                    currentFilter = firstFilter;
+                    filteredData = data;
+                    
+                    // Update the current view
+                    const activeView = document.querySelector('.view.active');
+                    if (activeView) {
+                        if (activeView.id === 'notesTable') {
+                            loadNotesTable();
+                        } else if (activeView.id === 'graph') {
+                            loadGraph();
+                        } else if (activeView.id === 'mindmap-container') {
+                            loadMindMap();
+                        } else if (activeView.id === 'outliner-container') {
+                            // Use the module function to update outliner
+                            window.outlinerModule.updateOutlinerWithFilter();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error("Error loading bookmark filter:", error);
+                });
+        } else {
+            clearFilter();
+        }
+    }
+}
+

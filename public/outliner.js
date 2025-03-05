@@ -209,10 +209,18 @@ function applyOutlinerSearch() {
     });
 }
 
+// Function to update outliner when filter changes
+function updateOutlinerWithFilter() {
+    if (document.getElementById('outliner-container').style.display === 'block') {
+        loadOutliner();
+    }
+}
+
 // Export the functions to be used in the main script
 window.outlinerModule = {
     loadOutliner,
     renderOutliner,
     initializeOutlinerSearch,
-    applyOutlinerSearch
+    applyOutlinerSearch,
+    updateOutlinerWithFilter
 }; 
