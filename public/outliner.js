@@ -10,6 +10,9 @@ function loadOutliner() {
             content: node.child_content,
             parent_id: node.parent_id
         }));
+        
+        // Calculate proper depth for filtered data
+        calculateDepthForFilteredData(hierarchyData);
         renderOutliner(hierarchyData);
     } else {
         // Add language parameter to the API call
@@ -25,6 +28,38 @@ function loadOutliner() {
                 clientLogger.error("Failed to load outliner data", { error });
             });
     }
+}
+
+// Function to calculate proper depth for filtered data
+function calculateDepthForFilteredData(data) {
+    // Create a map of nodes by ID
+    const nodeMap = new Map();
+    data.forEach(node => {
+        nodeMap.set(node.id, node);
+    });
+    
+    // Find root nodes (nodes without parents or with parents not in the filtered set)
+    const rootNodes = data.filter(node => 
+        !node.parent_id || !nodeMap.has(node.parent_id)
+    );
+    
+    // Assign depth 0 to root nodes and calculate depths for their children
+    rootNodes.forEach(node => {
+        node.depth = 0;
+        assignDepthToChildren(node, nodeMap, 1);
+    });
+}
+
+// Recursive function to assign depth to children
+function assignDepthToChildren(node, nodeMap, depth) {
+    // Find all children of this node
+    const children = Array.from(nodeMap.values()).filter(n => n.parent_id === node.id);
+    
+    // Assign depth to each child and process their children
+    children.forEach(child => {
+        child.depth = depth;
+        assignDepthToChildren(child, nodeMap, depth + 1);
+    });
 }
 
 // Function to render the outliner view
@@ -110,19 +145,29 @@ function renderOutliner(data) {
         contentEl.className = 'outliner-content';
         contentEl.textContent = node.content;
         contentEl.title = `ID: ${node.id}`;
-
+        
         // Make the node clickable to open markdown editor
         contentEl.addEventListener('click', () => {
             handleMarkdownClick(node.id);
         });
-
-        // Add ID label
+        
+        itemEl.appendChild(contentEl);
+        
+        // Create ID element but don't append it by default
         const idEl = document.createElement('span');
         idEl.className = 'outliner-id';
         idEl.textContent = node.id;
         
-        itemEl.appendChild(contentEl);
-        itemEl.appendChild(idEl);
+        // Add hover event to show/hide ID
+        itemEl.addEventListener('mouseenter', () => {
+            itemEl.appendChild(idEl);
+        });
+        
+        itemEl.addEventListener('mouseleave', () => {
+            if (itemEl.contains(idEl)) {
+                itemEl.removeChild(idEl);
+            }
+        });
         
         container.appendChild(itemEl);
 
