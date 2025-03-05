@@ -190,6 +190,7 @@
     <button onclick="showView('table')">Table View</button>
     <button onclick="showView('graph')">Graph View</button>
     <button onclick="showView('mindmap')">Mind Map</button>
+    <button onclick="showView('outliner')">Outliner</button>
     <button onclick="showView('terminal')">Terminal</button>
     <button onclick="transferMarkdownFiles()" class="settings-button">
       Transfer Markdown Files
@@ -219,6 +220,15 @@
 
   <div id="mindmap-container" class="view">
     <svg id="mindmap" width="1500" height="1200" style="background-color: #f9f9f9;"></svg>
+  </div>
+
+  <div id="outliner-container" class="view">
+    <div class="outliner-header">
+      <input type="text" id="outliner-search" placeholder="Search in outliner..." class="outliner-search">
+    </div>
+    <div id="outliner-content-wrapper" class="outliner-content-wrapper">
+      <div id="outliner-content" class="outliner-content"></div>
+    </div>
   </div>
 
   <div id="terminal" class="view">

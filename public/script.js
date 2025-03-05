@@ -7,6 +7,7 @@ let filteredData = null;
 let selectedFilters = new Set();
 let filterBookmarks = new Map();
 let totalRows = 0;
+let outlinerData = null; // Add this variable to store outliner data
 
 // Using a Set allows for the automatic handling of duplicate entries, meaning that if a user enters the same value multiple times, it will only be stored once.
 const recentInputs = {
@@ -554,6 +555,14 @@ function showView(viewName) {
                 viewElement.style.display = 'block';
                 viewElement.classList.add('active');
                 loadMindMap();
+            }
+            break;
+        case 'outliner':
+            viewElement = document.getElementById('outliner-container');
+            if (viewElement) {
+                viewElement.style.display = 'block';
+                viewElement.classList.add('active');
+                loadOutliner();
             }
             break;
         case 'terminal':
@@ -1229,6 +1238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize autocomplete for filter input
     initializeAutocomplete('filterInput');
+    initializeOutlinerSearch();
 });
 
 // Update the countNonTreeLinks function to be more explicit
@@ -1591,6 +1601,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Mind Map button
     document.querySelector('button[onclick="showView(\'mindmap\')"]').addEventListener('click', () => {
         showView('mindmap');
+    });
+
+    // Outliner button
+    document.querySelector('button[onclick="showView(\'outliner\')"]').addEventListener('click', () => {
+        showView('outliner');
     });
 
     // Terminal button
@@ -2765,4 +2780,182 @@ window.updateFilterUI = function() {
     originalUpdateFilterUI();
     removeDuplicateFilterHeadings();
 };
+
+// Function to load outliner data
+function loadOutliner() {
+    if (currentFilter && filteredData) {
+        console.log("Using filtered data for outliner:", filteredData);
+        const hierarchyData = filteredData.nodes.map(node => ({
+            id: node.child_id,
+            content: node.child_content,
+            parent_id: node.parent_id
+        }));
+        renderOutliner(hierarchyData);
+    } else {
+        // Add language parameter to the API call
+        fetch(`${apiBase}/hierarchy?lang=${currentLanguage}`)
+            .then(response => response.json())
+            .then(hierarchyData => {
+                console.log("Fetched hierarchy data for outliner:", hierarchyData);
+                outlinerData = hierarchyData;
+                renderOutliner(hierarchyData);
+            })
+            .catch(error => {
+                console.error("Error loading outliner data:", error);
+            });
+    }
+}
+
+// Function to render the outliner view
+function renderOutliner(data) {
+    const container = document.getElementById('outliner-content');
+    container.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state">No notes available</div>';
+        return;
+    }
+
+    // Build a tree structure from flat data
+    const idToNodeMap = new Map();
+    const rootNodes = [];
+
+    // First pass: create node objects and store in map
+    data.forEach(item => {
+        const node = {
+            id: item.id,
+            content: item.content,
+            parent_id: item.parent_id,
+            children: [],
+            depth: item.depth || 0,
+            expanded: true // Start with all nodes expanded
+        };
+        idToNodeMap.set(node.id, node);
+    });
+
+    // Second pass: establish parent-child relationships
+    data.forEach(item => {
+        const node = idToNodeMap.get(item.id);
+        if (item.parent_id && idToNodeMap.has(item.parent_id)) {
+            const parent = idToNodeMap.get(item.parent_id);
+            parent.children.push(node);
+        } else {
+            rootNodes.push(node);
+        }
+    });
+
+    // Function to recursively render a node and its children
+    function renderNode(node, container) {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'outliner-item';
+        itemEl.dataset.nodeId = node.id;
+        itemEl.style.paddingLeft = `${node.depth * 20}px`;
+
+        // Create toggle button if node has children
+        if (node.children && node.children.length > 0) {
+            const toggleEl = document.createElement('span');
+            toggleEl.className = `outliner-toggle ${node.expanded ? 'expanded' : 'collapsed'}`;
+            toggleEl.innerHTML = node.expanded ? '▼' : '▶';
+            toggleEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                node.expanded = !node.expanded;
+                renderOutliner(data); // Re-render with updated expansion state
+            });
+            itemEl.appendChild(toggleEl);
+        } else {
+            // Add spacing for leaf nodes to align with parent nodes
+            const spacerEl = document.createElement('span');
+            spacerEl.className = 'outliner-spacer';
+            spacerEl.innerHTML = '&nbsp;&nbsp;';
+            itemEl.appendChild(spacerEl);
+        }
+
+        // Add bullet point
+        const bulletEl = document.createElement('span');
+        bulletEl.className = 'outliner-bullet';
+        bulletEl.textContent = '•';
+        itemEl.appendChild(bulletEl);
+
+        // Add content
+        const contentEl = document.createElement('span');
+        contentEl.className = 'outliner-content';
+        contentEl.textContent = node.content;
+        contentEl.title = `ID: ${node.id}`;
+
+        // Make the node clickable to open markdown editor
+        contentEl.addEventListener('click', () => {
+            handleMarkdownClick(node.id);
+        });
+
+        // Add ID label
+        const idEl = document.createElement('span');
+        idEl.className = 'outliner-id';
+        idEl.textContent = node.id;
+        
+        itemEl.appendChild(contentEl);
+        itemEl.appendChild(idEl);
+        
+        container.appendChild(itemEl);
+
+        // Recursively render children if expanded
+        if (node.expanded && node.children && node.children.length > 0) {
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'outliner-children';
+            node.children.forEach(child => {
+                renderNode(child, childrenContainer);
+            });
+            container.appendChild(childrenContainer);
+        }
+    }
+
+    // Render all root nodes
+    rootNodes.forEach(rootNode => {
+        renderNode(rootNode, container);
+    });
+
+    // Add the search functionality
+    const searchInput = document.getElementById('outliner-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.outliner-item');
+            
+            items.forEach(item => {
+                const content = item.querySelector('.outliner-content').textContent.toLowerCase();
+                const id = item.querySelector('.outliner-id').textContent.toLowerCase();
+                
+                if (content.includes(searchTerm) || id.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                    
+                    // Make sure all parent containers are visible
+                    let parent = item.parentElement;
+                    while (parent && !parent.classList.contains('outliner-content-wrapper')) {
+                        if (parent.classList.contains('outliner-children')) {
+                            parent.style.display = 'block';
+                        }
+                        parent = parent.parentElement;
+                    }
+                } else {
+                    // Only hide if not searching - if searching, we'll handle visibility differently
+                    if (searchTerm) {
+                        item.style.display = 'none';
+                    }
+                }
+            });
+            
+            // If not searching, restore default visibility
+            if (!searchTerm) {
+                renderOutliner(data);
+            }
+        });
+    }
+}
+
+// Initialize the outliner search functionality
+function initializeOutlinerSearch() {
+    const searchInput = document.getElementById('outliner-search');
+    if (searchInput) {
+        searchInput.value = ''; // Clear search on init
+    }
+}
 
