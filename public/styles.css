@@ -554,3 +554,57 @@ form button:hover {
 .outliner-control-btn:hover {
     background-color: #e0e0e0;
 }
+
+/* Keyboard navigation styles */
+.vim-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    z-index: 9999;
+    display: none;
+}
+
+.vim-mode {
+    font-weight: bold;
+    color: #4CAF50;
+    margin-bottom: 5px;
+}
+
+.vim-command {
+    font-size: 14px;
+    color: #FFC107;
+    min-height: 16px;
+}
+
+.keyboard-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    z-index: 9999;
+    transition: opacity 0.5s;
+}
+
+.keyboard-notification.fade-out {
+    opacity: 0;
+}
+
+tr.keyboard-focus {
+    background-color: rgba(33, 150, 243, 0.2) !important;
+    outline: 2px solid #2196F3;
+}
+
+/* Add this to ensure the table doesn't lose focus styling on hover */
+tr.keyboard-focus:hover {
+    background-color: rgba(33, 150, 243, 0.3) !important;
+}

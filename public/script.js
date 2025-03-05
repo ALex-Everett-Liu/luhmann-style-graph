@@ -1240,6 +1240,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Use the module function instead
     window.outlinerModule.initializeOutlinerSearch();
+
+    keyboardManager.init();
 });
 
 // Update the countNonTreeLinks function to be more explicit
@@ -2589,4 +2591,386 @@ function loadBookmark(name) {
         }
     }
 }
+
+// Add keyboard shortcut and vim-like navigation system
+const keyboardManager = {
+    vimModeActive: false,
+    commandBuffer: '',
+    statusElement: null,
+    
+    init() {
+        // Create status indicator for vim mode
+        this.createStatusIndicator();
+        
+        // Add global keyboard event listener
+        document.addEventListener('keydown', this.handleKeyDown.bind(this));
+        
+        clientLogger.info('Keyboard shortcut manager initialized');
+    },
+    
+    createStatusIndicator() {
+        // Create a status indicator element for the vim mode
+        this.statusElement = document.createElement('div');
+        this.statusElement.className = 'vim-status';
+        this.statusElement.innerHTML = `
+            <div class="vim-mode">NORMAL</div>
+            <div class="vim-command"></div>
+        `;
+        document.body.appendChild(this.statusElement);
+        this.updateStatusVisibility();
+    },
+    
+    updateStatusVisibility() {
+        if (this.statusElement) {
+            this.statusElement.style.display = this.vimModeActive ? 'flex' : 'none';
+            this.statusElement.querySelector('.vim-mode').textContent = this.vimModeActive ? 'VIM' : 'NORMAL';
+            this.statusElement.querySelector('.vim-command').textContent = this.commandBuffer;
+        }
+    },
+    
+    toggleVimMode() {
+        this.vimModeActive = !this.vimModeActive;
+        this.commandBuffer = '';
+        this.updateStatusVisibility();
+        
+        // Show a brief notification
+        this.showNotification(this.vimModeActive ? 'Vim navigation mode activated' : 'Normal mode activated');
+    },
+    
+    showNotification(message) {
+        const notification = document.createElement('div');
+        notification.className = 'keyboard-notification';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        // Remove after a delay
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 500);
+        }, 2000);
+    },
+    
+    handleKeyDown(event) {
+        // Don't handle keyboard events when focus is in an input or textarea
+        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+            // Allow Escape key to work even in input fields
+            if (event.key === 'Escape') {
+                if (this.vimModeActive) {
+                    // Exit vim mode with Escape
+                    this.toggleVimMode();
+                    event.preventDefault();
+                } else if (document.querySelector('.markdown-modal')) {
+                    // Close markdown modal with Escape
+                    closeMarkdownModal();
+                    event.preventDefault();
+                }
+            }
+            return;
+        }
+        
+        // Toggle vim mode with Escape key
+        if (event.key === 'Escape') {
+            this.toggleVimMode();
+            event.preventDefault();
+            return;
+        }
+        
+        // Handle global shortcuts that work in both modes
+        if (this.handleGlobalShortcuts(event)) {
+            return;
+        }
+        
+        // Handle vim-mode specific keyboard navigation
+        if (this.vimModeActive) {
+            this.handleVimMode(event);
+            event.preventDefault();
+        }
+    },
+    
+    handleGlobalShortcuts(event) {
+        // Handle shortcuts that work in both modes (using Ctrl/Cmd combinations)
+        if (event.ctrlKey || event.metaKey) {
+            switch (event.key.toLowerCase()) {
+                case '1':
+                    showView('table');
+                    event.preventDefault();
+                    return true;
+                case '2':
+                    showView('graph');
+                    event.preventDefault();
+                    return true;
+                case '3':
+                    showView('mindmap');
+                    event.preventDefault();
+                    return true;
+                case '4':
+                    showView('outliner');
+                    event.preventDefault();
+                    return true;
+                case '5':
+                    showView('terminal');
+                    event.preventDefault();
+                    return true;
+                case 'f':
+                    // Focus filter input
+                    document.getElementById('filterInput').focus();
+                    event.preventDefault();
+                    return true;
+                case 's':
+                    // Save markdown if editing
+                    if (document.querySelector('.markdown-modal')) {
+                        const nodeId = document.querySelector('.markdown-modal h3').textContent.split(' ').pop();
+                        saveMarkdown(nodeId);
+                        event.preventDefault();
+                        return true;
+                    }
+                    break;
+                case 'l':
+                    // Toggle language
+                    toggleLanguage();
+                    event.preventDefault();
+                    return true;
+            }
+        }
+        
+        // Alt+key shortcuts
+        if (event.altKey) {
+            switch (event.key.toLowerCase()) {
+                case 'n':
+                    // Focus new note form
+                    document.getElementById('noteId').focus();
+                    event.preventDefault();
+                    return true;
+                case 'l':
+                    // Focus new link form
+                    document.getElementById('fromId').focus();
+                    event.preventDefault();
+                    return true;
+            }
+        }
+        
+        return false;
+    },
+    
+    handleVimMode(event) {
+        const key = event.key.toLowerCase();
+        
+        // Add key to command buffer
+        if (key !== 'escape') {
+            this.commandBuffer += key;
+            this.updateStatusVisibility();
+        }
+        
+        // Process command sequences
+        this.processCommands();
+    },
+    
+    processCommands() {
+        const cmd = this.commandBuffer;
+        
+        // Navigation commands
+        if (cmd === 'j') {
+            this.navigateTableDown();
+            this.resetCommandBuffer();
+        } else if (cmd === 'k') {
+            this.navigateTableUp();
+            this.resetCommandBuffer();
+        } else if (cmd === 'gg') {
+            this.navigateTableTop();
+            this.resetCommandBuffer();
+        } else if (cmd === 'G') {
+            this.navigateTableBottom();
+            this.resetCommandBuffer();
+        } else if (cmd === 'h') {
+            this.navigateLeft();
+            this.resetCommandBuffer();
+        } else if (cmd === 'l') {
+            this.navigateRight();
+            this.resetCommandBuffer();
+        }
+        
+        // View switching commands
+        else if (cmd === 'vt') {
+            showView('table');
+            this.resetCommandBuffer();
+        } else if (cmd === 'vg') {
+            showView('graph');
+            this.resetCommandBuffer();
+        } else if (cmd === 'vm') {
+            showView('mindmap');
+            this.resetCommandBuffer();
+        } else if (cmd === 'vo') {
+            showView('outliner');
+            this.resetCommandBuffer();
+        } else if (cmd === 'vx') {
+            showView('terminal');
+            this.resetCommandBuffer();
+        }
+        
+        // Action commands
+        else if (cmd === 'e') {
+            this.editFocusedNode();
+            this.resetCommandBuffer();
+        } else if (cmd === 'f') {
+            document.getElementById('filterInput').focus();
+            this.resetCommandBuffer();
+            this.toggleVimMode(); // Exit vim mode when focusing an input
+        } else if (cmd === 'af') {
+            applyFilter();
+            this.resetCommandBuffer();
+        } else if (cmd === 'cf') {
+            clearFilter();
+            this.resetCommandBuffer();
+        } else if (cmd === 'L') {
+            toggleLanguage();
+            this.resetCommandBuffer();
+        }
+        
+        // Clear command buffer after 2 seconds of inactivity
+        if (this.commandTimeout) {
+            clearTimeout(this.commandTimeout);
+        }
+        this.commandTimeout = setTimeout(() => {
+            this.resetCommandBuffer();
+        }, 2000);
+    },
+    
+    resetCommandBuffer() {
+        this.commandBuffer = '';
+        this.updateStatusVisibility();
+    },
+    
+    navigateTableDown() {
+        const table = document.querySelector('#notesTable table');
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tbody tr');
+        if (!rows.length) return;
+        
+        // Find current focused row or start with the first
+        const focusedRow = table.querySelector('tr.keyboard-focus');
+        let nextIndex = 0;
+        
+        if (focusedRow) {
+            // Find index of current focused row
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i] === focusedRow) {
+                    nextIndex = Math.min(i + 1, rows.length - 1);
+                    break;
+                }
+            }
+            focusedRow.classList.remove('keyboard-focus');
+        }
+        
+        // Focus next row
+        rows[nextIndex].classList.add('keyboard-focus');
+        rows[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+    
+    navigateTableUp() {
+        const table = document.querySelector('#notesTable table');
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tbody tr');
+        if (!rows.length) return;
+        
+        // Find current focused row or start with the first
+        const focusedRow = table.querySelector('tr.keyboard-focus');
+        let nextIndex = 0;
+        
+        if (focusedRow) {
+            // Find index of current focused row
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i] === focusedRow) {
+                    nextIndex = Math.max(i - 1, 0);
+                    break;
+                }
+            }
+            focusedRow.classList.remove('keyboard-focus');
+        }
+        
+        // Focus next row
+        rows[nextIndex].classList.add('keyboard-focus');
+        rows[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+    
+    navigateTableTop() {
+        const table = document.querySelector('#notesTable table');
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tbody tr');
+        if (!rows.length) return;
+        
+        // Remove focus from current row
+        const focusedRow = table.querySelector('tr.keyboard-focus');
+        if (focusedRow) {
+            focusedRow.classList.remove('keyboard-focus');
+        }
+        
+        // Focus first row
+        rows[0].classList.add('keyboard-focus');
+        rows[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+    
+    navigateTableBottom() {
+        const table = document.querySelector('#notesTable table');
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tbody tr');
+        if (!rows.length) return;
+        
+        // Remove focus from current row
+        const focusedRow = table.querySelector('tr.keyboard-focus');
+        if (focusedRow) {
+            focusedRow.classList.remove('keyboard-focus');
+        }
+        
+        // Focus last row
+        const lastRow = rows[rows.length - 1];
+        lastRow.classList.add('keyboard-focus');
+        lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+    
+    navigateLeft() {
+        // Navigate through tabs or handle left navigation in different views
+        const activeView = document.querySelector('.view.active') || 
+                           document.querySelector('.view[style*="display: block"]');
+                           
+        if (activeView?.id === 'mindmap-container' || activeView?.id === 'graph') {
+            // Move viewBox left in SVG visualizations
+            const svg = activeView.querySelector('svg');
+            if (svg) {
+                const viewBox = svg.viewBox.baseVal;
+                viewBox.x -= 50; // Move left
+            }
+        }
+    },
+    
+    navigateRight() {
+        // Navigate through tabs or handle right navigation in different views
+        const activeView = document.querySelector('.view.active') || 
+                           document.querySelector('.view[style*="display: block"]');
+                           
+        if (activeView?.id === 'mindmap-container' || activeView?.id === 'graph') {
+            // Move viewBox right in SVG visualizations
+            const svg = activeView.querySelector('svg');
+            if (svg) {
+                const viewBox = svg.viewBox.baseVal;
+                viewBox.x += 50; // Move right
+            }
+        }
+    },
+    
+    editFocusedNode() {
+        // Open markdown editor for the focused node
+        const focusedRow = document.querySelector('tr.keyboard-focus');
+        if (focusedRow) {
+            const nodeId = focusedRow.dataset.nodeId;
+            if (nodeId) {
+                handleMarkdownClick(nodeId);
+            }
+        }
+    }
+};
+
 
