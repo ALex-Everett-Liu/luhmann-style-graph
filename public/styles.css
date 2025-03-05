@@ -473,10 +473,19 @@ form button:hover {
   cursor: pointer;
   color: var(--text-color);
   user-select: none;
+  transition: transform 0.2s ease;
 }
 
 .outliner-toggle:hover {
   color: var(--primary-color);
+}
+
+.outliner-toggle.expanded {
+  transform: rotate(0deg);
+}
+
+.outliner-toggle.collapsed {
+  transform: rotate(-90deg);
 }
 
 .outliner-spacer {
