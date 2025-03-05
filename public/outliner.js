@@ -196,7 +196,7 @@ function renderOutliner(data) {
     outlinerItemsWrapper.className = 'outliner-items-wrapper';
     container.appendChild(outlinerItemsWrapper);
 
-    // Modify the renderNode function to respect depth pagination
+    // Modify the renderNode function to fix the expand/collapse toggle functionality
     function renderNode(node, container) {
         // Skip nodes that don't belong on the current depth page
         const minDepth = currentDepthPage * depthPerPage;
@@ -214,6 +214,11 @@ function renderOutliner(data) {
         const relativeDepth = node.depth - minDepth;
         itemEl.style.paddingLeft = `${relativeDepth * 20 + 10}px`;
 
+        // Create a container for the node controls to ensure proper layout
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'outliner-node-controls';
+        itemEl.appendChild(controlsContainer);
+
         // Add focus button for nodes that have children
         if (node.children && node.children.length > 0) {
             const focusBtn = document.createElement('button');
@@ -225,7 +230,7 @@ function renderOutliner(data) {
                 // Implement focus functionality
                 focusOnNode(node.id, data);
             });
-            itemEl.appendChild(focusBtn);
+            controlsContainer.appendChild(focusBtn);
         }
 
         // Create toggle button if node has children
@@ -233,26 +238,39 @@ function renderOutliner(data) {
             const toggleEl = document.createElement('span');
             toggleEl.className = `outliner-toggle ${node.expanded ? 'expanded' : 'collapsed'}`;
             toggleEl.innerHTML = node.expanded ? '▼' : '▶';
-            toggleEl.addEventListener('click', (e) => {
+            
+            // Add a more explicit click handler with debugging
+            toggleEl.addEventListener('click', function(e) {
                 e.stopPropagation();
+                console.log('Toggle clicked for node:', node.id);
+                
+                // Toggle the expanded state
                 node.expanded = !node.expanded;
+                
+                // Update the toggle appearance
+                this.innerHTML = node.expanded ? '▼' : '▶';
+                this.className = `outliner-toggle ${node.expanded ? 'expanded' : 'collapsed'}`;
                 
                 // Find the children container for this node
                 const childrenContainer = itemEl.nextElementSibling;
+                console.log('Children container:', childrenContainer);
+                
                 if (childrenContainer && childrenContainer.classList.contains('outliner-children')) {
-                    // Toggle visibility instead of re-rendering the entire tree
+                    // Toggle visibility
                     childrenContainer.style.display = node.expanded ? 'block' : 'none';
-                    toggleEl.innerHTML = node.expanded ? '▼' : '▶';
-                    toggleEl.className = `outliner-toggle ${node.expanded ? 'expanded' : 'collapsed'}`;
+                    console.log('Toggled visibility to:', node.expanded ? 'block' : 'none');
+                } else {
+                    console.warn('Could not find children container for node:', node.id);
                 }
             });
-            itemEl.appendChild(toggleEl);
+            
+            controlsContainer.appendChild(toggleEl);
         } else {
             // Add spacing for leaf nodes to align with parent nodes
             const spacerEl = document.createElement('span');
             spacerEl.className = 'outliner-spacer';
             spacerEl.innerHTML = '&nbsp;&nbsp;';
-            itemEl.appendChild(spacerEl);
+            controlsContainer.appendChild(spacerEl);
         }
 
         // Add bullet point
@@ -299,9 +317,13 @@ function renderOutliner(data) {
         }
 
         // Recursively render children if expanded and on this depth page
-        if (node.children && node.children.length > 0 && node.expanded) {
+        if (node.children && node.children.length > 0) {
             const childrenContainer = document.createElement('div');
             childrenContainer.className = 'outliner-children';
+            childrenContainer.dataset.parentId = node.id; // Add parent ID for easier debugging
+            
+            // Set initial display based on expanded state
+            childrenContainer.style.display = node.expanded ? 'block' : 'none';
             
             // Check if any children are in the visible depth range
             const hasVisibleChildren = node.children.some(
@@ -323,7 +345,11 @@ function renderOutliner(data) {
                     renderOutliner(data);
                 });
                 container.appendChild(moreItemsEl);
-            }
+            } else {
+                // Still append the container even if no visible children
+                // This ensures the toggle has something to show/hide
+            container.appendChild(childrenContainer);
+        }
         }
     }
 
@@ -519,7 +545,7 @@ function renderOutliner(data) {
         }
     }
 
-    // Modify the focusOnNode function to only include the horizontal breadcrumb trail
+    // Modify the focusOnNode function to include all ancestors in the breadcrumb trail
     function focusOnNode(nodeId, allData) {
         // Find the selected node
         const selectedNode = allData.find(n => n.id === nodeId);
@@ -549,7 +575,7 @@ function renderOutliner(data) {
         
         addDescendants(nodeId, 0);
         
-        // Build the ancestor path for breadcrumbs
+        // Build the complete ancestor path for breadcrumbs
         const ancestorPath = [];
         let currentNode = selectedNode;
         
@@ -559,7 +585,7 @@ function renderOutliner(data) {
             content: currentNode.content
         });
         
-        // Then add all ancestors
+        // Then add all ancestors by traversing up the hierarchy
         while (currentNode.parent_id) {
             const parentNode = allData.find(n => n.id === currentNode.parent_id);
             if (!parentNode) break;
@@ -575,7 +601,7 @@ function renderOutliner(data) {
         // Render the focused view
         renderOutliner(focusedData);
         
-        // Create and show the breadcrumb trail
+        // Create and show the breadcrumb trail with all ancestors
         const container = document.getElementById('outliner-content');
         const breadcrumbsEl = document.createElement('div');
         breadcrumbsEl.className = 'outliner-breadcrumbs';
@@ -587,7 +613,7 @@ function renderOutliner(data) {
                 return `<span class="breadcrumb-current">${node.content}</span>`;
             }
             
-            // For other ancestors, make them clickable to navigate
+            // For all ancestors, make them clickable to navigate
             return `<a href="#" class="breadcrumb-link" data-node-id="${node.id}">${node.content}</a>`;
         }).join('<span class="breadcrumb-separator">›</span>');
         
@@ -613,6 +639,23 @@ function renderOutliner(data) {
 
     // Function to expand or collapse all nodes
     function expandCollapseAll(expand) {
+        console.log(`${expand ? 'Expanding' : 'Collapsing'} all nodes`);
+        
+        // First update all node objects in our data structure
+        const updateNodeStates = (nodes) => {
+            nodes.forEach(node => {
+                node.expanded = expand;
+                if (node.children && node.children.length > 0) {
+                    updateNodeStates(node.children);
+                }
+            });
+        };
+        
+        // Get root nodes from our data structure
+        const rootNodes = Array.from(idToNodeMap.values()).filter(node => !node.parent_id);
+        updateNodeStates(rootNodes);
+        
+        // Then update the DOM
         // Update all toggle buttons
         document.querySelectorAll('.outliner-toggle').forEach(toggle => {
             toggle.innerHTML = expand ? '▼' : '▶';
@@ -623,6 +666,8 @@ function renderOutliner(data) {
         document.querySelectorAll('.outliner-children').forEach(container => {
             container.style.display = expand ? 'block' : 'none';
         });
+        
+        console.log('Expand/collapse operation completed');
     }
 
     // Add the search functionality
