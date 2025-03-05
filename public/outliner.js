@@ -247,13 +247,21 @@ function renderOutliner(data) {
         
         const linksContainer = document.createElement('div');
         linksContainer.className = 'outliner-links-container';
-        linksContainer.style.paddingLeft = parentEl.style.paddingLeft;
+        
+        // Calculate proper indentation based on parent's depth
+        const depth = parseInt(parentEl.style.paddingLeft) || 0;
+        linksContainer.style.marginLeft = `${depth}px`;
         linksContainer.style.display = 'none'; // Hidden by default
         
         // Create toggle button for links
         const linksToggleBtn = document.createElement('button');
         linksToggleBtn.className = 'outliner-links-toggle';
-        linksToggleBtn.textContent = `Links (${outgoingLinks.length + incomingLinks.length})`;
+        
+        // Show count of each type
+        const outCount = outgoingLinks.length;
+        const inCount = incomingLinks.length;
+        linksToggleBtn.innerHTML = `<span class="outliner-link-icon">🔗</span> Links (${outCount + inCount})`;
+        
         linksToggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const isVisible = linksContainer.style.display === 'block';
@@ -264,7 +272,7 @@ function renderOutliner(data) {
         // Add links toggle button to parent
         const linksToggleContainer = document.createElement('div');
         linksToggleContainer.className = 'outliner-links-toggle-container';
-        linksToggleContainer.style.paddingLeft = parentEl.style.paddingLeft;
+        linksToggleContainer.style.marginLeft = `${depth}px`;
         linksToggleContainer.appendChild(linksToggleBtn);
         
         // Add outgoing links
@@ -274,7 +282,7 @@ function renderOutliner(data) {
             
             const outgoingHeader = document.createElement('div');
             outgoingHeader.className = 'outliner-links-header';
-            outgoingHeader.textContent = 'Links';
+            outgoingHeader.innerHTML = `<span class="outliner-link-icon">→</span> Links (${outgoingLinks.length})`;
             outgoingSection.appendChild(outgoingHeader);
             
             const outgoingList = document.createElement('ul');
@@ -296,7 +304,7 @@ function renderOutliner(data) {
             
             const incomingHeader = document.createElement('div');
             incomingHeader.className = 'outliner-links-header';
-            incomingHeader.textContent = 'Backlinks';
+            incomingHeader.innerHTML = `<span class="outliner-link-icon">←</span> Backlinks (${incomingLinks.length})`;
             incomingSection.appendChild(incomingHeader);
             
             const incomingList = document.createElement('ul');
@@ -330,7 +338,11 @@ function renderOutliner(data) {
         const linkEl = document.createElement('a');
         linkEl.className = 'outliner-link';
         linkEl.href = '#';
-        linkEl.innerHTML = `<span class="outliner-link-icon">${linkType === 'outgoing' ? '→' : '←'}</span> ${nodeContent}`;
+        
+        // Use different arrow symbols based on link type
+        const icon = linkType === 'outgoing' ? '→' : '←';
+        linkEl.innerHTML = `<span class="outliner-link-icon">${icon}</span> ${nodeContent} <span class="outliner-link-id">${nodeId}</span>`;
+        
         linkEl.title = description || `${linkType === 'outgoing' ? 'Link to' : 'Referenced by'} ${nodeId}`;
         
         // Add click event to navigate to the linked node
