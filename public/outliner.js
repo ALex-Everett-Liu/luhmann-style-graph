@@ -2,7 +2,7 @@
 let outlinerData = null;
 let linkData = null; // Store link data for references
 let currentDepthPage = 0;
-const depthPerPage = 4; // Show 4 levels per page
+const depthPerPage = 20; // Show 20 levels per page instead of just 4
 
 // Function to load outliner data
 function loadOutliner() {
@@ -212,7 +212,7 @@ function renderOutliner(data) {
         
         // Adjust padding based on relative depth within the current page
         const relativeDepth = node.depth - minDepth;
-        itemEl.style.paddingLeft = `${relativeDepth * 20 + 10}px`;
+        itemEl.style.paddingLeft = `${relativeDepth * 12 + 10}px`;
 
         // Create a container for the node controls to ensure proper layout
         const controlsContainer = document.createElement('div');
@@ -331,9 +331,9 @@ function renderOutliner(data) {
             );
             
             if (hasVisibleChildren) {
-            node.children.forEach(child => {
-                renderNode(child, childrenContainer);
-            });
+                node.children.forEach(child => {
+                    renderNode(child, childrenContainer);
+                });
                 container.appendChild(childrenContainer);
             } else if (node.depth === maxDepth && node.children.length > 0) {
                 // Show a "more items" indicator for nodes at the max depth that have children
@@ -348,8 +348,8 @@ function renderOutliner(data) {
             } else {
                 // Still append the container even if no visible children
                 // This ensures the toggle has something to show/hide
-            container.appendChild(childrenContainer);
-        }
+                container.appendChild(childrenContainer);
+            }
         }
     }
 
