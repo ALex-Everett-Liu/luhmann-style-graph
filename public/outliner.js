@@ -223,7 +223,7 @@ function renderOutliner(data) {
         if (node.children && node.children.length > 0) {
             const focusBtn = document.createElement('button');
             focusBtn.className = 'outliner-focus-node-btn';
-            focusBtn.innerHTML = '⊕';
+            focusBtn.innerHTML = '⊙';
             focusBtn.title = 'Focus on this branch';
             focusBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
